@@ -87,7 +87,7 @@ dependencies {
 
     debugImplementation project(path: ":kotlin")
     releaseImplementation project(path: ":kotlin")
-    previewImplementation(libs.rive.android.preview)
+    previewImplementation project(path: ":kotlin")  // 使用本地模块
 
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
