@@ -33,3 +33,7 @@ local.properties
 # =====
 *.hprof
 tombstones/
+
+# Native C++ build output (auto-generated, ~900MB)
+kotlin/src/main/cpp/out/
+

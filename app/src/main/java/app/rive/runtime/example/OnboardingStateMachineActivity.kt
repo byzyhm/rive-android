@@ -2,7 +2,6 @@ package app.rive.runtime.example
 
 import android.os.Bundle
 import android.util.Log
-import android.view.View
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 import app.rive.runtime.kotlin.RiveAnimationView
@@ -13,6 +12,14 @@ import app.rive.runtime.kotlin.RiveAnimationView
  * 演示如何使用 onboarding_part_1.riv 动画：
  * 1. 加载动画后显示消息弹出效果 (state=0)
  * 2. 点击按钮后依次播放翻译动画 (state=1,2,3)
+ * 
+ * 动画时序：
+ * ├── 0s     : state=0, 消息弹出动画开始
+ * ├── ~1.5s  : 消息弹出完成
+ * ├── 1.5s   : state=1, 第一条消息翻译
+ * ├── 1.7s   : state=2, 第二条消息翻译 (+0.2s)
+ * ├── 1.9s   : state=3, 第三条消息翻译 (+0.2s)
+ * └── ~3s    : 所有翻译完成
  */
 class OnboardingStateMachineActivity : AppCompatActivity() {
 
@@ -22,6 +29,10 @@ class OnboardingStateMachineActivity : AppCompatActivity() {
 
     private val animationView by lazy(LazyThreadSafetyMode.NONE) {
         findViewById<RiveAnimationView>(R.id.onboarding_state_machine)
+    }
+
+    private val autoPlayButton by lazy(LazyThreadSafetyMode.NONE) {
+        findViewById<Button>(R.id.btn_auto_play)
     }
 
     private val translateButton by lazy(LazyThreadSafetyMode.NONE) {
@@ -83,22 +94,38 @@ class OnboardingStateMachineActivity : AppCompatActivity() {
      * 设置按钮点击事件
      */
     private fun setupButtons() {
+        // 自动播放按钮：播放完整动画序列（包括 1.5s 延迟后自动翻译）
+        autoPlayButton.setOnClickListener {
+            Log.d(TAG, "Auto play button clicked")
+            animationController.reset()
+            initializeAnimation()
+            animationController.playFullSequence()
+            updateButtonStates(isPlaying = true)
+        }
+        
+        // 手动翻译按钮：立即开始翻译动画
         translateButton.setOnClickListener {
             Log.d(TAG, "Translate button clicked")
             animationController.playTranslationSequence()
-            translateButton.isEnabled = false
-            resetButton.isEnabled = true
+            updateButtonStates(isPlaying = true)
         }
 
+        // 重置按钮
         resetButton.setOnClickListener {
             Log.d(TAG, "Reset button clicked")
             animationController.reset()
-            translateButton.isEnabled = true
-            resetButton.isEnabled = false
+            initializeAnimation()
+            updateButtonStates(isPlaying = false)
         }
 
         // 初始状态
-        resetButton.isEnabled = false
+        updateButtonStates(isPlaying = false)
+    }
+    
+    private fun updateButtonStates(isPlaying: Boolean) {
+        autoPlayButton.isEnabled = !isPlaying
+        translateButton.isEnabled = !isPlaying
+        resetButton.isEnabled = isPlaying
     }
 
     override fun onDestroy() {

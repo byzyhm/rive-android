@@ -24,21 +24,27 @@ class OnboardingAnimationController(
     companion object {
         private const val TAG = "OnboardingAnimation"
 
-        // Number 输入参数名称（从 Rive 编辑器截图确认）
+        // 状态机名称（从日志确认：State Machine 1，有空格）
+        private const val STATE_MACHINE_NAME = "StateMachine_1"
+
+        // Number 输入参数名称（从截图确认，使用空格）
         private const val INPUT_STATE = "state"
-        private const val INPUT_LENGTH_1 = "length 1"
-        private const val INPUT_LENGTH_2 = "length 2"
-        private const val INPUT_LENGTH_3 = "length 3"
+        private const val INPUT_LENGTH_1 = "length_1"
+        private const val INPUT_LENGTH_2 = "length_2"
+        private const val INPUT_LENGTH_3 = "length_3"
 
-        // Text Run 名称（需要设计师确认，这里使用推测的名称）
-        private const val TEXT_CONTENT_1 = "Content 1"
-        private const val TEXT_CONTENT_2 = "Content 2"
-        private const val TEXT_CONTENT_3 = "Content 3"
-        private const val TEXT_TRANSLATED_1 = "Translated 1"
-        private const val TEXT_TRANSLATED_2 = "Translated 2"
-        private const val TEXT_TRANSLATED_3 = "Translated 3"
+        // Text Run 名称（需要设计师确认确切名称，先尝试空格版本）
+        private const val TEXT_CONTENT_1 = "Content_1"
+        private const val TEXT_CONTENT_2 = "Content_2"
+        private const val TEXT_CONTENT_3 = "Content_3"
+        private const val TEXT_TRANSLATED_1 = "Translated_1"
+        private const val TEXT_TRANSLATED_2 = "Translated_2"
+        private const val TEXT_TRANSLATED_3 = "Translated_3"
 
-        // 翻译动画延迟时间（设计要求 0.2s）
+        // 消息弹出动画时长（约 1.5 秒后开始翻译）
+        private const val POPUP_ANIMATION_DELAY_MS = 1500L
+        
+        // 翻译动画之间的延迟时间（设计要求 0.2s）
         private const val TRANSLATION_DELAY_MS = 200L
         
         // Length 计算系数
@@ -61,8 +67,8 @@ class OnboardingAnimationController(
         }
     }
 
-    // 缓存状态机名称
-    private var stateMachineName: String? = null
+    // 使用设计师确认的状态机名称
+    private val stateMachineName: String = STATE_MACHINE_NAME
 
     /**
      * 初始化动画 - 设置所有文本内容和长度参数
@@ -70,8 +76,7 @@ class OnboardingAnimationController(
      * @param data 翻译数据
      */
     fun initialize(data: TranslationData) {
-        // 获取状态机名称
-        ensureStateMachineName()
+        Log.d(TAG, "Initializing with state machine: $stateMachineName")
 
         // 1. 设置原文内容（根据目标语言选择不同的原文）
         setOriginalContents(data.targetLanguage)
@@ -89,7 +94,7 @@ class OnboardingAnimationController(
     }
 
     /**
-     * 开始播放翻译动画序列
+     * 开始播放翻译动画序列（立即执行）
      *
      * 调用时机：当消息弹出动画完成后，需要开始翻译效果时调用
      */
@@ -98,19 +103,36 @@ class OnboardingAnimationController(
 
         // 第一条翻译动画
         setStateValue(1f)
-        Log.d(TAG, "State set to 1 - First message translating")
 
         // 第二条翻译动画（延迟 0.2s）
         handler.postDelayed({
             setStateValue(2f)
-            Log.d(TAG, "State set to 2 - Second message translating")
         }, TRANSLATION_DELAY_MS)
 
         // 第三条翻译动画（再延迟 0.2s，累计 0.4s）
         handler.postDelayed({
             setStateValue(3f)
-            Log.d(TAG, "State set to 3 - Third message translating")
         }, TRANSLATION_DELAY_MS * 2)
+    }
+    
+    /**
+     * 自动播放完整动画序列
+     * 
+     * 时序：
+     * - 0s: 消息弹出动画开始 (state=0)
+     * - 1.5s: 第一条翻译 (state=1)
+     * - 1.7s: 第二条翻译 (state=2)
+     * - 1.9s: 第三条翻译 (state=3)
+     */
+    fun playFullSequence() {
+        Log.d(TAG, "Starting full animation sequence...")
+        
+        // state=0 已在 initialize 中设置，消息弹出动画自动播放
+        
+        // 1.5秒后开始翻译序列
+        handler.postDelayed({
+            playTranslationSequence()
+        }, POPUP_ANIMATION_DELAY_MS)
     }
 
     /**
@@ -162,30 +184,6 @@ class OnboardingAnimationController(
 
     // ============ 私有方法 ============
 
-    private fun ensureStateMachineName() {
-        if (stateMachineName != null) {
-            Log.d(TAG, "State machine already set: $stateMachineName")
-            return
-        }
-
-        val file = riveView.controller.file
-        if (file == null) {
-            Log.e(TAG, "File not loaded, cannot get state machine name")
-            return
-        }
-        
-        val artboard = file.firstArtboard
-        val names = artboard.stateMachineNames
-        Log.d(TAG, "Available state machines: $names")
-        
-        if (names.isNotEmpty()) {
-            stateMachineName = names.first()
-            Log.d(TAG, "Using state machine: $stateMachineName")
-        } else {
-            Log.e(TAG, "No state machines found in artboard: ${artboard.name}")
-        }
-    }
-
     /**
      * 设置原文内容
      */
@@ -227,21 +225,19 @@ class OnboardingAnimationController(
      * 设置长度参数（像素宽度）
      */
     private fun setLengthInputs(contents: List<ContentItem>) {
-        val smName = stateMachineName ?: return
-
         contents.getOrNull(0)?.let {
             val width = measureTextWidth(it.translated)
-            riveView.setNumberState(smName, INPUT_LENGTH_1, width)
+            riveView.setNumberState(stateMachineName, INPUT_LENGTH_1, width)
             Log.d(TAG, "Set $INPUT_LENGTH_1 = $width")
         }
         contents.getOrNull(1)?.let {
             val width = measureTextWidth(it.translated)
-            riveView.setNumberState(smName, INPUT_LENGTH_2, width)
+            riveView.setNumberState(stateMachineName, INPUT_LENGTH_2, width)
             Log.d(TAG, "Set $INPUT_LENGTH_2 = $width")
         }
         contents.getOrNull(2)?.let {
             val width = measureTextWidth(it.translated)
-            riveView.setNumberState(smName, INPUT_LENGTH_3, width)
+            riveView.setNumberState(stateMachineName, INPUT_LENGTH_3, width)
             Log.d(TAG, "Set $INPUT_LENGTH_3 = $width")
         }
     }
@@ -267,11 +263,8 @@ class OnboardingAnimationController(
      * 设置 state 输入值
      */
     private fun setStateValue(value: Float) {
-        val smName = stateMachineName ?: run {
-            Log.e(TAG, "State machine name not available")
-            return
-        }
-        riveView.setNumberState(smName, INPUT_STATE, value)
+        riveView.setNumberState(stateMachineName, INPUT_STATE, value)
+        Log.d(TAG, "Set $INPUT_STATE = $value")
     }
 
     /**

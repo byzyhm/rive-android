@@ -17,41 +17,58 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:riveAutoPlay="true"
-        app:riveResource="@raw/onboarding_part_1" />
+        app:riveResource="@raw/onboarding_part_1_03" />
 
     <!-- 按钮容器 -->
     <LinearLayout
         android:id="@+id/button_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
+        android:orientation="vertical"
         android:padding="16dp"
         android:gravity="center"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent">
 
-        <!-- 翻译按钮 -->
+        <!-- 自动播放按钮 -->
         <Button
-            android:id="@+id/btn_translate"
-            android:layout_width="0dp"
+            android:id="@+id/btn_auto_play"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginEnd="8dp"
-            android:text="开始翻译"
+            android:layout_marginBottom="8dp"
+            android:text="自动播放完整动画"
             android:textColor="#FFFFFF"
-            android:backgroundTint="#4CAF50" />
+            android:backgroundTint="#2196F3" />
 
-        <!-- 重置按钮 -->
-        <Button
-            android:id="@+id/btn_reset"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:text="重置"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#FF5722" />
+            android:orientation="horizontal">
+
+            <!-- 手动翻译按钮 -->
+            <Button
+                android:id="@+id/btn_translate"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:text="立即翻译"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#4CAF50" />
+
+            <!-- 重置按钮 -->
+            <Button
+                android:id="@+id/btn_reset"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:text="重置"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#FF5722" />
+
+        </LinearLayout>
 
     </LinearLayout>
 
