@@ -36,10 +36,10 @@ class InteractiveSamplesActivity : AppCompatActivity() {
                 // can call h again after work!
                 if (keepGoing) {
                     setTime()
-                    h.postDelayed(this, 360)
+                    h.postDelayed(this, 1000)
                 }
             }
-        }, 360) // 1 second dela
+        }, 1000) // 1 second dela
 
         setPlayView()
 
