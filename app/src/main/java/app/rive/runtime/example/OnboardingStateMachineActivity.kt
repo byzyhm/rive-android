@@ -53,6 +53,7 @@ class OnboardingStateMachineActivity : AppCompatActivity() {
         animationController = OnboardingAnimationController(animationView)
 
         // 等待动画加载完成后初始化
+        // 等待动画加载完成后初始化
         animationView.post {
             // 调试：先打印 Rive 文件信息
             animationController.printDebugInfo()
