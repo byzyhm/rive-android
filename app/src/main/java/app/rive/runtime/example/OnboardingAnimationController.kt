@@ -205,6 +205,10 @@ class OnboardingAnimationController(
 
     /**
      * 调试：打印 Rive 文件信息
+     * 
+     * ⚠️ 重要：使用安全的只读方式获取信息
+     * 不要调用 file.artboard()，因为那会创建新实例并添加到 file.dependencies
+     * 改用 controller.activeArtboard（由 controller 管理生命周期）
      */
     fun printDebugInfo() {
         Log.d(TAG, "========== Rive File Info ==========")
@@ -216,19 +220,20 @@ class OnboardingAnimationController(
             return
         }
 
-        val artboardCount = file.artboardCount
-        Log.d(TAG, "Artboard count: $artboardCount")
-
-        for (i in 0 until artboardCount) {
-            val artboard = file.artboard(i)
-            Log.d(TAG, "--- Artboard [$i]: ${artboard.name} ---")
-            Log.d(TAG, "State Machines: ${artboard.stateMachineNames}")
-            Log.d(TAG, "Animations: ${artboard.animationNames}")
-            
-            // 打印屏幕密度信息，用于调试 length 计算
-            Log.d(TAG, "Screen density: ${riveView.resources.displayMetrics.density}")
-            Log.d(TAG, "Scaled density: ${riveView.resources.displayMetrics.scaledDensity}")
+        // 使用只读属性，安全
+        Log.d(TAG, "Artboard count: ${file.artboardCount}")
+        
+        // 使用 controller 的 activeArtboard（安全，由 controller 管理）
+        val activeArtboard = riveView.controller.activeArtboard
+        if (activeArtboard != null) {
+            Log.d(TAG, "--- Artboard [0]: ${activeArtboard.name} ---")
+            Log.d(TAG, "State Machines: ${activeArtboard.stateMachineNames}")
+            Log.d(TAG, "Animations: ${activeArtboard.animationNames}")
         }
+        
+        // 打印屏幕密度信息，用于调试 length 计算
+        Log.d(TAG, "Screen density: ${riveView.resources.displayMetrics.density}")
+        Log.d(TAG, "Scaled density: ${riveView.resources.displayMetrics.scaledDensity}")
         
         Log.d(TAG, "Current state machine: $stateMachineName")
         Log.d(TAG, "========== End of Info ==========")

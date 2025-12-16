@@ -565,3 +565,159 @@ D/OnboardingActivity: Controller initialized successfully
 
 如果看到 `isPlaying=false`，说明状态机没有启动！
 
+---
+
+## 🚨 第三轮修复 (2024-12-16 最终修复)
+
+### 发现的真正根本原因
+
+#### **致命错误：手动调用 `release()` 破坏了引用计数！** 🚨🚨🚨
+
+**错误代码位置**：`RiveInfoUtil.printRiveFileInfo()`
+
+```kotlin
+// ❌ 致命错误代码 (RiveInfoUtil.kt)
+fun printRiveFileInfo(riveView: RiveAnimationView) {
+    file.artboardNames.forEachIndexed { index, artboardName ->
+        val artboard = file.artboard(artboardName)  // ← 创建新实例
+        // ... 使用 artboard ...
+        
+        artboard.stateMachineNames.forEach { smName ->
+            val sm = artboard.stateMachine(smName)
+            // ... 使用 sm ...
+            sm.release()  // ❌ 错误 1：手动释放 StateMachine
+        }
+        
+        artboard.release()  // ❌ 错误 2：手动释放 Artboard
+    }
+}
+```
+
+### 问题原理详解
+
+#### 🔍 Rive SDK 的引用计数机制
+
+```kotlin
+// 当调用 file.artboard(name) 时：
+fun artboard(name: String): Artboard {
+    val artboardPointer = cppArtboardByName(cppPointer, name)
+    val ab = Artboard(artboardPointer, lock, this)
+    dependencies.add(ab)  // ← 关键：添加到 file.dependencies！
+    return ab  // refs = 1
+}
+```
+
+**设计意图**：
+- 从 File 创建的 Artboard 会自动成为 File 的依赖
+- 当 File 被释放时，会自动释放所有依赖的 Artboard
+- **用户不应该手动调用 `release()`！**
+
+#### 🐛 错误的释放流程
+
+```
+时间线：
+
+1️⃣ 调用 file.artboard("Artboard")
+   ├── 创建新的 Artboard 实例 (refs = 1)
+   └── 自动添加到 file.dependencies ← 关键！
+
+2️⃣ 用户代码调用 artboard.release()
+   ├── refs: 1 → 0
+   ├── 触发 dispose()
+   └── Artboard 被销毁，C++ 对象被删除
+   └── ⚠️ 但 file.dependencies 中仍有这个 artboard 的引用！
+
+3️⃣ Activity 退出，View detach，触发 renderer.delete()
+   ↓
+4️⃣ 异步执行 disposeDependencies()
+   ↓
+5️⃣ 调用 controller.release()
+   ↓
+6️⃣ controller.release() 设置 file = null
+   ↓
+7️⃣ setFile(null) 调用 oldFile.release()
+   ↓
+8️⃣ file.release() → file.dispose()
+   ↓
+9️⃣ file.dispose() 遍历 dependencies
+   ↓
+🔟 对 artboard 调用 release()
+   ↓
+💥 尝试释放已经 refs=0 的对象
+   ↓
+💥 require(count >= 0) 失败！
+   ↓
+💥 JNI ERROR: Failed requirement!
+```
+
+### 📊 日志证据
+
+```
+14:00:06.618 RiveInfo W  Failed to load artboard Artboard: Failed requirement.  ← 第一次
+14:01:24.083 RiveInfo W  Failed to load artboard Artboard: Failed requirement.  ← 第二次
+```
+
+**这个警告在第一次进入时就出现了！** 说明 `printRiveFileInfo()` 破坏了引用计数状态。
+
+### ✅ 正确的修复
+
+```kotlin
+// ✅ 正确代码 (RiveInfoUtil.kt)
+fun printRiveFileInfo(riveView: RiveAnimationView) {
+    val file = riveView.controller.file ?: return
+    
+    // ✅ 使用只读属性，不创建新实例
+    Log.d(TAG, "Artboard names: ${file.artboardNames}")
+    
+    // ✅ 使用 controller 已有的 activeArtboard（由 controller 管理）
+    riveView.controller.activeArtboard?.let { artboard ->
+        Log.d(TAG, "Active: ${artboard.name}")
+        Log.d(TAG, "Animations: ${artboard.animationNames}")
+    }
+    
+    // ✅ 使用已有的 stateMachines（由 controller 管理）
+    riveView.stateMachines.forEach { sm ->
+        Log.d(TAG, "Active SM: ${sm.name}")
+    }
+    
+    // ❌ 永远不要调用：
+    // - artboard.release()
+    // - sm.release()
+}
+```
+
+### 📚 引用计数使用规则
+
+| 场景 | 正确做法 | 错误做法 |
+|------|----------|----------|
+| 从 file 获取 artboard | 不调用 release()，让 file 管理 | 手动 release() |
+| 获取 activeArtboard | 直接使用，由 controller 管理 | 手动 release() |
+| 获取 stateMachine | 直接使用，由 artboard 管理 | 手动 release() |
+| 自己创建的 File | 需要手动 release() | 忘记 release() |
+
+### ⚠️ 关键教训
+
+> **从 File 获取的 Artboard 和从 Artboard 获取的 StateMachine 都会自动添加到父对象的 dependencies 中。当父对象被释放时，会自动释放所有 dependencies。**
+>
+> **用户绝对不应该手动调用这些对象的 `release()` 方法！**
+
+### 修复文件清单
+
+| 文件 | 修复内容 |
+|------|----------|
+| `RiveInfoUtil.kt` | 删除 `artboard.release()` 和 `sm.release()` 调用 |
+| `OnboardingAnimationController.kt` | 使用 `controller.activeArtboard` 替代 `file.artboard()` |
+
+### 修复后的测试
+
+1. **确认日志无警告**：不再出现 `Failed requirement` 警告
+2. **第二次进入测试**：应该能正常播放
+3. **退出后测试其他 Activity**：StressTestActivity 应该正常
+4. **内存泄漏测试**：多次进出无泄漏
+
+---
+
+**最终修复日期**：2024-12-16  
+**根本原因**：`RiveInfoUtil.printRiveFileInfo()` 手动调用 `release()` 破坏引用计数  
+**修复方法**：删除手动 `release()` 调用，使用已管理的对象
+
