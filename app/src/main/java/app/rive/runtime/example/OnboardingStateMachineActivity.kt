@@ -8,7 +8,6 @@ import androidx.activity.ComponentActivity
 import app.rive.runtime.example.databinding.OnbardingStateMachineBinding
 import app.rive.runtime.example.utils.setEdgeToEdgeContent
 import app.rive.runtime.kotlin.controllers.RiveFileController
-import app.rive.runtime.kotlin.core.Loop
 import app.rive.runtime.kotlin.core.PlayableInstance
 
 /**
@@ -172,22 +171,30 @@ class OnboardingStateMachineActivity : ComponentActivity() {
 
     /**
      * 重置并重新开始循环
+     * 
+     * ⚠️ 重要：不能使用 reset()！
+     * reset() 创建的 Artboard 的"初始状态"与文件首次加载时不同。
+     * 必须使用 setRiveResource() 重新加载文件，才能完全回到初始状态。
      */
     private fun resetAndLoop() {
         Log.d(TAG, "重置并重新开始循环")
 
         val riveView = binding.onboardingStateMachine
 
-        // 重置 Artboard 回到初始状态
-        riveView.reset()
+        // 1. 重新加载 Rive 文件（完全重置，和首次加载一样）
+        riveView.setRiveResource(
+            resId = R.raw.onboarding_part_1_with_font,
+            stateMachineName = STATE_MACHINE_NAME,
+            autoplay = true
+        )
 
-        // 重新启动状态机
-        riveView.play(STATE_MACHINE_NAME, Loop.LOOP, isStateMachine = true)
+        // 2. 重新设置 Text Run
+        setupTextContent()
 
-        // 重新设置参数
+        // 3. 重新设置 Number 参数
         setupLengthInputs()
 
-        // 开始新一轮循环
+        // 4. 开始新一轮循环
         startAnimationLoop()
     }
 
