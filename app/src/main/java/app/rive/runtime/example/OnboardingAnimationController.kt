@@ -69,6 +69,10 @@ class OnboardingAnimationController(
 
     // 使用设计师确认的状态机名称
     private val stateMachineName: String = STATE_MACHINE_NAME
+    
+    // ✅ 新增：标志位，防止释放后继续执行
+    @Volatile
+    private var isReleased = false
 
     /**
      * 初始化动画 - 设置所有文本内容和长度参数
@@ -77,7 +81,10 @@ class OnboardingAnimationController(
      */
     fun initialize(data: TranslationData) {
         Log.d(TAG, "Initializing with state machine: $stateMachineName")
-        riveView.isOpaque = false
+        // ❌ 删除：riveView.isOpaque = false
+        // 原因：isOpaque 应该在 View 初始化时设置，不应该在这里重复设置
+        // 这个属性会影响 TextureView 的渲染，重复设置可能导致全局渲染问题
+        
         // 1. 设置原文内容（根据目标语言选择不同的原文）
         setOriginalContents(data.targetLanguage)
 
@@ -97,8 +104,15 @@ class OnboardingAnimationController(
      * 开始播放翻译动画序列（立即执行）
      *
      * 调用时机：当消息弹出动画完成后，需要开始翻译效果时调用
+     * 
+     * ✅ 修复：添加 isReleased 检查，防止释放后继续执行
      */
     fun playTranslationSequence() {
+        if (isReleased) {
+            Log.w(TAG, "Controller已释放，跳过翻译动画")
+            return
+        }
+        
         Log.d(TAG, "Starting translation sequence...")
 
         // 第一条翻译动画
@@ -106,12 +120,16 @@ class OnboardingAnimationController(
 
         // 第二条翻译动画（延迟 0.2s）
         handler.postDelayed({
-            setStateValue(2f)
+            if (!isReleased) {
+                setStateValue(2f)
+            }
         }, TRANSLATION_DELAY_MS)
 
         // 第三条翻译动画（再延迟 0.2s，累计 0.4s）
         handler.postDelayed({
-            setStateValue(3f)
+            if (!isReleased) {
+                setStateValue(3f)
+            }
         }, TRANSLATION_DELAY_MS * 2)
     }
     
@@ -123,32 +141,66 @@ class OnboardingAnimationController(
      * - 1.5s: 第一条翻译 (state=1)
      * - 1.7s: 第二条翻译 (state=2)
      * - 1.9s: 第三条翻译 (state=3)
+     * 
+     * ✅ 修复：添加 isReleased 检查
      */
     fun playFullSequence() {
+        if (isReleased) {
+            Log.w(TAG, "Controller已释放，跳过完整动画序列")
+            return
+        }
+        
         Log.d(TAG, "Starting full animation sequence...")
         
         // state=0 已在 initialize 中设置，消息弹出动画自动播放
         
         // 1.5秒后开始翻译序列
         handler.postDelayed({
-            playTranslationSequence()
+            if (!isReleased) {
+                playTranslationSequence()
+            }
         }, POPUP_ANIMATION_DELAY_MS)
     }
 
     /**
      * 重置动画到初始状态
+     * 
+     * ✅ 修复：移除所有回调，防止泄漏
      */
     fun reset() {
+        Log.d(TAG, "Resetting animation...")
+        
+        // 移除所有延迟任务（重要：防止 Handler 泄漏）
         handler.removeCallbacksAndMessages(null)
-        setStateValue(0f)
-        Log.d(TAG, "Animation reset to initial state")
+        
+        // 只在未释放时重置状态
+        if (!isReleased) {
+            setStateValue(0f)
+            Log.d(TAG, "Animation reset to initial state (state=0)")
+        } else {
+            Log.w(TAG, "Controller已释放，跳过状态重置")
+        }
     }
 
     /**
      * 释放资源
+     * 
+     * ✅ 改进：设置释放标志，防止后续操作
+     * 
+     * 调用时机：
+     * - Activity onStop 时
+     * - Activity onDestroy 时（双重保险）
      */
     fun release() {
+        Log.d(TAG, "Releasing controller resources...")
+        
+        // 设置释放标志
+        isReleased = true
+        
+        // 移除所有 Handler 回调（重要：防止内存泄漏）
         handler.removeCallbacksAndMessages(null)
+        
+        Log.d(TAG, "Controller resources released")
     }
 
     /**
@@ -261,10 +313,21 @@ class OnboardingAnimationController(
 
     /**
      * 设置 state 输入值
+     * 
+     * ✅ 修复：添加释放检查，防止在释放后操作 RiveView
      */
     private fun setStateValue(value: Float) {
-        riveView.setNumberState(stateMachineName, INPUT_STATE, value)
-        Log.d(TAG, "Set $INPUT_STATE = $value")
+        if (isReleased) {
+            Log.w(TAG, "Controller已释放，跳过设置 state=$value")
+            return
+        }
+        
+        try {
+            riveView.setNumberState(stateMachineName, INPUT_STATE, value)
+            Log.d(TAG, "Set $INPUT_STATE = $value")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set state value: ${e.message}")
+        }
     }
 
     /**
