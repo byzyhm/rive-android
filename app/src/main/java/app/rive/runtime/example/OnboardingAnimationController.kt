@@ -77,7 +77,7 @@ class OnboardingAnimationController(
      */
     fun initialize(data: TranslationData) {
         Log.d(TAG, "Initializing with state machine: $stateMachineName")
-
+        riveView.isOpaque = false
         // 1. 设置原文内容（根据目标语言选择不同的原文）
         setOriginalContents(data.targetLanguage)
 

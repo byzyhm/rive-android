@@ -9,6 +9,7 @@ import app.rive.runtime.kotlin.controllers.ControllerStateManagement
 @ControllerStateManagement
 class MainActivity : ComponentActivity() {
     private val buttonsData = listOf(
+        Pair(R.id.go_text_run_demo, TextRunDemoActivity::class.java),
         Pair(R.id.go_compose, ComposeActivity::class.java),
         Pair(R.id.go_simple, SimpleActivity::class.java),
         Pair(R.id.go_events, EventsActivity::class.java),

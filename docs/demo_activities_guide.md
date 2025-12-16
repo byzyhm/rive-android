@@ -6,6 +6,7 @@
 
 ## 目录
 
+0. [与设计师协作指南](#-与设计师协作指南) - ⭐ **必读**
 1. [ComposeActivity](#1-composeactivity) - Jetpack Compose 集成
 2. [SimpleActivity](#2-simpleactivity) - 最简单的使用示例
 3. [EventsActivity](#3-eventsactivity) - Rive 事件监听
@@ -39,6 +40,228 @@
 31. [FontFallback](#31-fontfallback) - 字体回退策略
 32. [TouchPassthroughActivity](#32-touchpassthroughactivity) - 触摸穿透
 33. [ImageBindingActivity](#33-imagebindingactivity) - 图片绑定
+
+---
+
+## 📋 与设计师协作指南
+
+在使用 Rive 动画前，开发者需要从设计师处获取一些关键信息。以下是必需的信息清单：
+
+### 🎨 设计师需要提供的信息
+
+#### 1. Text Run 名称 ⚠️ **无法通过代码枚举**
+
+Text Run 是动态文本，必须由设计师在 Rive 编辑器中设置名称：
+
+**设计师操作步骤：**
+```
+1. 在 Rive 编辑器中选择文本元素
+2. 在右侧面板找到 "Text" → "Runs"
+3. 点击 "+" 添加一个 Run
+4. 设置 "Export Name"（如 "title"、"content"）
+5. 重新导出 .riv 文件
+```
+
+**开发者使用：**
+```kotlin
+// 使用设计师提供的 Text Run 名称
+animationView.setTextRunValue("title", "Hello World")
+
+// ❌ 错误：无法枚举所有 Text Run 名称
+// Rive API 不提供此功能
+```
+
+#### 2. Artboard 嵌套路径 ⚠️ **无法通过代码枚举**
+
+如果使用嵌套 Artboard，**必须从设计师处获取**完整的层级结构：
+
+```
+Main Artboard
+├── ProfileCard          (路径: "ProfileCard")
+│   └── Avatar          (路径: "ProfileCard/Avatar")
+└── MessageList         (路径: "MessageList")
+    └── MessageItem     (路径: "MessageList/MessageItem")
+```
+
+⚠️ **重要限制：**
+- Kotlin API **没有提供**枚举嵌套 Artboard 的方法
+- 虽然 C++ 层有 `nestedArtboards()` 方法，但未在 Kotlin 层绑定
+- 只能通过**已知路径**访问嵌套内容
+- **必须由设计师提供完整路径**
+
+**开发者使用：**
+```kotlin
+// 访问嵌套的 Text Run - 需要设计师提供 path
+animationView.setTextRunValue(
+    textRunName = "username",
+    textValue = "Alice",
+    path = "ProfileCard/Avatar"  // ⚠️ 此路径无法枚举，需设计师提供
+)
+```
+
+#### 3. State Machine 信息
+
+- State Machine 名称
+- Input 参数名称和类型（Boolean、Number、Trigger）
+
+**开发者可以通过代码获取：**
+```kotlin
+val file = animationView.controller.file
+val artboard = file?.firstArtboard
+val stateMachineNames = artboard?.stateMachineNames // ✅ 可获取
+```
+
+#### 4. Animation 信息
+
+- Animation 名称
+- 是否循环
+
+**开发者可以通过代码获取：**
+```kotlin
+val animationNames = artboard?.animationNames // ✅ 可获取
+```
+
+#### 5. Event 信息
+
+- Event 名称
+- Event 类型（General、OpenURL）
+- Event 属性
+
+⚠️ 事件只能在触发时获取，无法预先枚举。
+
+#### 6. 字体和资源
+
+- 字体是否嵌入到 .riv 文件
+- 外部字体文件名称和路径
+- 外部图片资源名称
+
+### 📄 推荐的设计师交付清单模板
+
+建议让设计师使用以下模板：
+
+```markdown
+## Rive 文件清单 - filename.riv
+
+### 基本信息
+- 文件名: filename.riv
+- 默认 Artboard: Main
+- 文件大小: XX KB
+
+### Artboards
+| 名称 | 说明 |
+|------|------|
+| Main | 主画板 |
+| Profile | 用户资料卡片 |
+
+### Text Runs（动态文本）⭐ 重要
+| Text Run 名称 | 所在位置 | 路径 (path) | 初始值 | 代码示例 |
+|--------------|---------|------------|--------|---------|
+| title | 主 Artboard | - | "Hello" | `setTextRunValue("title", "Hello")` |
+| username | 嵌套 Artboard | Profile | "" | `setTextRunValue("username", "Alice", "Profile")` |
+| message | 深层嵌套 | Profile/Card | "" | `setTextRunValue("message", "Hi", "Profile/Card")` |
+
+**说明**：
+- **所在位置**：Text Run 是在主画板还是嵌套画板中
+- **路径**：如果在嵌套画板，必须提供完整路径（用 `/` 分隔）
+- 主 Artboard 的 Text Run 不需要 path 参数（2 参数方法）
+- 嵌套 Artboard 的 Text Run 需要 path 参数（3 参数方法）
+
+### State Machines
+| State Machine | Input 名称 | 类型 | 说明 |
+|---------------|-----------|------|------|
+| Controller | isActive | Boolean | 是否激活 |
+| Controller | progress | Number | 进度值 (0-100) |
+| Controller | reset | Trigger | 重置动画 |
+
+### Animations
+| 名称 | 是否循环 | 时长 | 说明 |
+|------|---------|------|------|
+| idle | ✓ | 2s | 待机动画 |
+| tap | ✗ | 0.5s | 点击反馈 |
+
+### Events
+| 名称 | 类型 | 属性 | 说明 |
+|------|------|------|------|
+| onComplete | General | action: String | 完成时触发 |
+| openLink | OpenURL | url: String | 打开链接 |
+
+### 字体
+| 字体名称 | 是否嵌入 | 外部文件 | 说明 |
+|---------|---------|---------|------|
+| Roboto | ✓ | - | 已嵌入 |
+| CustomFont | ✗ | fonts/custom.ttf | 需要加载 |
+
+### 外部资源
+| 资源名称 | 类型 | 文件路径 | 说明 |
+|---------|------|---------|------|
+| avatar | Image | images/avatar.png | 用户头像 |
+| background | Image | images/bg.jpg | 背景图片 |
+
+### Artboard 嵌套结构
+```
+Main
+├── Header
+│   └── Logo
+└── Content
+    ├── Card1
+    └── Card2
+```
+```
+
+### 🔍 开发者可自行获取的信息
+
+以下信息可以通过代码获取，无需设计师提供：
+
+```kotlin
+fun printRiveFileInfo(riveView: RiveAnimationView) {
+    val file = riveView.controller.file ?: return
+    
+    Log.d("Rive", "=== Artboards ===")
+    file.artboardNames.forEach { name ->
+        Log.d("Rive", "- $name")
+        
+        val artboard = file.artboard(name)
+        
+        Log.d("Rive", "  State Machines: ${artboard.stateMachineNames}")
+        Log.d("Rive", "  Animations: ${artboard.animationNames}")
+        
+        // 获取 State Machine 的 Inputs
+        artboard.stateMachineNames.forEach { smName ->
+            val sm = artboard.stateMachine(smName)
+            Log.d("Rive", "  [$smName] Inputs:")
+            sm.inputs.forEach { input ->
+                val type = when {
+                    input.isBoolean -> "Boolean"
+                    input.isNumber -> "Number"
+                    input.isTrigger -> "Trigger"
+                    else -> "Unknown"
+                }
+                Log.d("Rive", "    - ${input.name} ($type)")
+            }
+            sm.release()
+        }
+        
+        artboard.release()
+    }
+}
+```
+
+### ⚠️ 关键提醒
+
+| 信息类型 | 能否枚举 | 获取方式 |
+|---------|---------|---------|
+| Artboard 名称 | ✅ 可以 | `file.artboardNames` |
+| Animation 名称 | ✅ 可以 | `artboard.animationNames` |
+| State Machine 名称 | ✅ 可以 | `artboard.stateMachineNames` |
+| State Machine Inputs | ✅ 可以 | `stateMachine.inputs` |
+| **Text Run 名称** | ❌ **不能** | **必须由设计师提供** |
+| **嵌套 Artboard 路径** | ❌ **不能** | **Kotlin API 未暴露（C++ 有但未绑定）** |
+| Event 信息 | ⚠️ 运行时 | 触发时才能获取 |
+
+**补充说明：**
+- **嵌套 Artboard 路径无法枚举**：虽然 C++ 层有 `nestedArtboards()` 方法，但 Kotlin API 没有绑定此方法
+- 只能通过**已知路径**访问嵌套内容，如 `textRun(name, "ArtboardB-1/ArtboardC-1")`
+- **必须从设计师处获取完整的嵌套路径信息**
 
 ---
 
@@ -733,17 +956,214 @@ animationView.setBooleanStateAtPath("CircleInnerState", true, "CircleOuter/Circl
 
 ### 💻 示例代码
 
+#### 方式 1：访问当前活动 Artboard 的 Text Run（不需要 path）
+
 ```kotlin
-// 设置嵌套文本
+// 不带 path - 访问主 Artboard 上的 Text Run
+animationView.setTextRunValue(
+    textRunName = "title",
+    textValue = "Hello World"
+)
+
+// 获取当前 Artboard 的 Text Run
+val text = animationView.getTextRunValue("title")
+```
+
+#### 方式 2：访问嵌套 Artboard 的 Text Run（需要 path）
+
+```kotlin
+// 带 path - 访问嵌套 Artboard 上的 Text Run
 animationView.setTextRunValue(
     textRunName = "ArtboardBRun",
     textValue = "Updated Text",
-    path = "ArtboardB-1/ArtboardC-1"
+    path = "ArtboardB-1/ArtboardC-1"  // 指定嵌套路径
 )
 
-// 获取嵌套文本
+// 获取嵌套 Artboard 的 Text Run
 val text = animationView.getTextRunValue("ArtboardBRun", "ArtboardB-1")
 ```
+
+### 🔀 两个重载方法的区别
+
+`setTextRunValue` 有**两个重载版本**：
+
+| 方法签名 | 用途 | 何时使用 |
+|---------|------|---------|
+| `setTextRunValue(textRunName, textValue)` | 访问**当前活动 Artboard** | Text Run 在主 Artboard 上 |
+| `setTextRunValue(textRunName, textValue, path)` | 访问**嵌套 Artboard** | Text Run 在嵌套的 Artboard 上 |
+
+### 🤔 如何判断是否需要 path 参数？
+
+```
+决策流程：
+
+┌─────────────────────────────────┐
+│ Text Run 在哪个 Artboard 上？   │
+└────────────┬────────────────────┘
+             │
+    ┌────────┴────────┐
+    │                 │
+    ▼                 ▼
+┌─────────┐      ┌──────────┐
+│ 主画板   │      │ 嵌套画板  │
+└────┬────┘      └─────┬────┘
+     │                 │
+     ▼                 ▼
+不需要 path        需要 path 参数
+只需要 2 个参数    需要 3 个参数
+
+使用：              使用：
+setTextRunValue(   setTextRunValue(
+  "name",            "name",
+  "value"            "value",
+)                    "Nested/Path"
+                   )
+```
+
+**快速判断方法：**
+1. 如果 Text Run 直接在主 Artboard → **不需要 path**
+2. 如果 Text Run 在嵌套的子 Artboard → **需要 path**
+3. 不确定？看设计师是否使用了嵌套 Artboard 结构
+
+**实际场景对比：**
+
+```kotlin
+// ========== 场景 1: 简单动画（不嵌套）==========
+// Rive 文件结构：
+// 📦 Main Artboard
+//    ├── 🎨 Shape: Background
+//    ├── 📝 Text Run: "title"      ← 直接在主画板
+//    └── 📝 Text Run: "subtitle"   ← 直接在主画板
+
+// 代码使用 - 不需要 path：
+animationView.setTextRunValue("title", "Welcome")      // ✅ 2 个参数
+animationView.setTextRunValue("subtitle", "Hello")     // ✅ 2 个参数
+
+// ========== 场景 2: 复杂嵌套动画 ==========
+// Rive 文件结构：
+// 📦 Main Artboard
+//    ├── 🎨 Shape: Background
+//    ├── 📦 Nested Artboard: "Header"
+//    │   └── 📝 Text Run: "title"           ← 在嵌套画板中
+//    └── 📦 Nested Artboard: "ProfileCard"
+//        ├── 📝 Text Run: "username"        ← 在嵌套画板中
+//        └── 📦 Nested Artboard: "Avatar"
+//            └── 📝 Text Run: "initials"    ← 在深层嵌套中
+
+// 代码使用 - 需要 path：
+animationView.setTextRunValue("title", "Welcome", "Header")              // ✅ 3 个参数
+animationView.setTextRunValue("username", "Alice", "ProfileCard")        // ✅ 3 个参数
+animationView.setTextRunValue("initials", "AB", "ProfileCard/Avatar")    // ✅ 3 个参数，多层路径
+
+// ========== 场景 3: 混合结构 ==========
+// Rive 文件结构：
+// 📦 Main Artboard
+//    ├── 📝 Text Run: "mainTitle"      ← 主画板
+//    └── 📦 Nested Artboard: "Content"
+//        └── 📝 Text Run: "content"    ← 嵌套画板
+
+// 代码使用 - 混合使用：
+animationView.setTextRunValue("mainTitle", "App Name")      // ✅ 主画板，2 个参数
+animationView.setTextRunValue("content", "Details", "Content")  // ✅ 嵌套，3 个参数
+```
+
+### 📋 参数来源说明
+
+#### `textRunName` - Text Run 名称
+
+**完全由设计师在 Rive 编辑器中设置**，开发者无法枚举获取。
+
+设计师操作流程：
+```
+1. 在 Rive 编辑器中选择文本元素
+2. 在右侧面板找到 "Text" → "Runs"
+3. 点击 "+" 添加一个 Run
+4. 设置 "Export Name"（如 "ArtboardBRun"）
+5. 重新导出 .riv 文件
+```
+
+⚠️ **重要提示**：
+- Rive API **没有提供**枚举所有 Text Run 名称的方法
+- 只能通过 `artboard.textRun(name)` 按名称获取
+- 如果名称不匹配或未设置，会抛出 `TextValueRunException`
+
+```kotlin
+// ❌ 错误：使用了不存在的名称
+animationView.setTextRunValue("WrongName", "Text", "Path")
+// 抛出：TextValueRunException: No Rive TextValueRun found with name "WrongName"
+
+// ✅ 正确：使用设计师提供的确切名称
+animationView.setTextRunValue("ArtboardBRun", "Text", "ArtboardB-1")
+```
+
+#### `path` - 嵌套 Artboard 路径
+
+**由设计师在 Rive 中创建的 Artboard 嵌套结构决定**
+
+路径规则：
+- 单层嵌套：`"ArtboardB-1"`
+- 多层嵌套：`"ArtboardB-1/ArtboardC-1"`（用 `/` 分隔）
+- Artboard 名称由设计师在 Rive 编辑器中命名
+
+```kotlin
+// 示例：访问不同层级的 Text Run
+// 第一层嵌套
+animationView.setTextRunValue("ArtboardBRun", "Text", "ArtboardB-1")
+
+// 第二层嵌套
+animationView.setTextRunValue("ArtboardCRun", "Text", "ArtboardB-1/ArtboardC-1")
+
+// 第三层嵌套
+animationView.setTextRunValue("ArtboardDRun", "Text", "ArtboardB-1/ArtboardC-1/ArtboardD-1")
+```
+
+#### `textValue` - 文本内容
+
+**由开发者在运行时动态设置**，可以是任何字符串。
+
+### 💡 最佳实践
+
+**建议让设计师提供文档清单：**
+
+```markdown
+## Rive 文件清单 - nested_text_run.riv
+
+### Text Runs（动态文本）
+| Text Run 名称 | 所在路径 | 说明 |
+|--------------|----------|------|
+| ArtboardBRun | ArtboardB-1 | B-1 画板的文本 |
+| ArtboardBRun | ArtboardB-2 | B-2 画板的文本 |
+| ArtboardCRun | ArtboardB-1/ArtboardC-1 | B-1/C-1 画板的文本 |
+| ArtboardCRun | ArtboardB-1/ArtboardC-2 | B-1/C-2 画板的文本 |
+| ArtboardCRun | ArtboardB-2/ArtboardC-1 | B-2/C-1 画板的文本 |
+| ArtboardCRun | ArtboardB-2/ArtboardC-2 | B-2/C-2 画板的文本 |
+
+### Artboard 嵌套结构
+```
+Main Artboard
+├── ArtboardB-1
+│   ├── ArtboardC-1
+│   └── ArtboardC-2
+└── ArtboardB-2
+    ├── ArtboardC-1
+    └── ArtboardC-2
+```
+```
+
+这样可以避免反复沟通和调试！
+
+### 🔍 参数获取方式对比
+
+| 参数 | 来源 | 能否通过代码枚举 | 如何获取 |
+|------|------|----------------|----------|
+| `textRunName` | 设计师在 Rive 编辑器设置 | ❌ 不能 | 必须由设计师提供 |
+| `path` | Rive 文件的 Artboard 层级 | ⚠️ 部分可以 | 可通过 `file.artboardNames` 获取名称，但层级需要设计师说明 |
+| `textValue` | 开发者动态设置 | ✅ 是 | 通过 `getTextRunValue()` 获取当前值 |
+
+### 📚 参考资料
+
+- [Rive Text 运行时文档](https://rive.app/docs/runtimes/text)
+- [Rive 社区文档 - Text](https://rive.app/community/doc/text/docn2E6y1lXo)
 
 ---
 
@@ -1048,12 +1468,49 @@ Fragment 切换示例，展示动画在 Fragment 生命周期中的行为。
 val textRun = animationView.controller.activeArtboard?.textRun("name")
 textRun?.text = "New Text"
 
-// 方式 2：直接设置
+// 方式 2：直接设置（不带 path - 用于当前活动 Artboard）
 animationView.setTextRunValue("name", "New Text")
 
 // 获取当前值
 val currentText = animationView.getTextRunValue("name")
 ```
+
+**注意**：此示例中 Text Run 位于**主 Artboard** 上，所以**不需要** `path` 参数。如果 Text Run 位于嵌套 Artboard，需要使用带 `path` 参数的重载方法，详见 [NestedTextRunActivity](#14-nestedtextrunactivity)。
+
+### ⚠️ 重要提示
+
+**Text Run 名称 `"name"` 必须由设计师在 Rive 编辑器中设置**
+
+1. Text Run 名称无法通过代码枚举获取
+2. 必须使用设计师提供的确切名称
+3. 如果名称不匹配，会抛出 `TextValueRunException`
+
+```kotlin
+// ❌ 错误：Text Run 名称不存在
+val textRun = animationView.controller.activeArtboard?.textRun("wrongName")
+// 抛出：TextValueRunException: No Rive TextValueRun found with name "wrongName"
+
+// ✅ 正确：使用设计师提供的名称
+val textRun = animationView.controller.activeArtboard?.textRun("name")
+```
+
+**设计师设置步骤：**
+1. 在 Rive 编辑器中选择文本元素
+2. 在右侧面板找到 "Text" → "Runs"
+3. 设置 "Export Name"（如 "name"）
+4. 重新导出 .riv 文件
+
+💡 **提示**：查看示例代码注释：
+```kotlin
+/**
+ * Dynamically change a Rive Text Run value. In this example the run is named: "name"
+ * For the run to be discoverable at runtime, the name has to be set in the editor.
+ *
+ * See: https://rive.app/community/doc/text/docn2E6y1lXo
+ */
+```
+
+详细说明请参考 [NestedTextRunActivity](#14-nestedtextrunactivity) 章节。
 
 ---
 

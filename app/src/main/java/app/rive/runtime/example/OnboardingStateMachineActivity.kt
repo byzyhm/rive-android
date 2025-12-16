@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.util.Log
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
+import app.rive.runtime.example.utils.RiveInfoUtil.printRiveFileInfo
 import app.rive.runtime.kotlin.RiveAnimationView
 
 /**
@@ -57,6 +58,7 @@ class OnboardingStateMachineActivity : AppCompatActivity() {
         animationView.post {
             // 调试：先打印 Rive 文件信息
             animationController.printDebugInfo()
+            printRiveFileInfo(animationView)
             
             initializeAnimation()
             setupButtons()
