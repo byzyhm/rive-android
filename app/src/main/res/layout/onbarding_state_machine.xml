@@ -7,7 +7,7 @@
     android:background="@mipmap/img_star"
     tools:context=".OnboardingStateMachineActivity">
 
-    <!-- Rive 动画视图 -->
+    <!-- Rive 动画视图 - 自动循环播放 -->
     <app.rive.runtime.kotlin.RiveAnimationView
         android:id="@+id/onboarding_state_machine"
         android:layout_width="300dp"
@@ -21,58 +21,5 @@
         app:riveFit="COVER"
         app:riveResource="@raw/onboarding_part_1_with_font"
         app:riveStateMachine="StateMachine_1" />
-
-    <!-- 按钮容器 -->
-    <LinearLayout
-        android:id="@+id/button_container"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:padding="16dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent">
-
-        <!-- 自动播放按钮 -->
-        <Button
-            android:id="@+id/btn_auto_play"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:backgroundTint="#2196F3"
-            android:text="自动播放完整动画"
-            android:textColor="#FFFFFF" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
-
-            <!-- 手动翻译按钮 -->
-            <Button
-                android:id="@+id/btn_translate"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
-                android:layout_weight="1"
-                android:backgroundTint="#4CAF50"
-                android:text="立即翻译"
-                android:textColor="#FFFFFF" />
-
-            <!-- 重置按钮 -->
-            <Button
-                android:id="@+id/btn_reset"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:layout_weight="1"
-                android:backgroundTint="#FF5722"
-                android:text="重置"
-                android:textColor="#FFFFFF" />
-
-        </LinearLayout>
-
-    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

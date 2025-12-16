@@ -1,244 +1,233 @@
 package app.rive.runtime.example
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.activity.ComponentActivity
 import app.rive.runtime.example.databinding.OnbardingStateMachineBinding
-import app.rive.runtime.example.databinding.TextRunDemoBinding
-import app.rive.runtime.example.utils.RiveInfoUtil.printRiveFileInfo
 import app.rive.runtime.example.utils.setEdgeToEdgeContent
+import app.rive.runtime.kotlin.controllers.RiveFileController
+import app.rive.runtime.kotlin.core.Loop
+import app.rive.runtime.kotlin.core.PlayableInstance
 
 /**
- * Onboarding 动画示例 Activity
+ * Onboarding 动画示例 Activity（简化版）
  *
- * 演示如何使用 onboarding_part_1.riv 动画：
- * 1. 加载动画后显示消息弹出效果 (state=0)
- * 2. 点击按钮后依次播放翻译动画 (state=1,2,3)
- * 
- * 动画时序：
+ * 功能：进入页面后自动循环播放动画
+ *
+ * 一次播放的时间线：
  * ├── 0s     : state=0, 消息弹出动画开始
- * ├── ~1.5s  : 消息弹出完成
+ * ├── ~1s    : 消息弹出完成
  * ├── 1.5s   : state=1, 第一条消息翻译
  * ├── 1.7s   : state=2, 第二条消息翻译 (+0.2s)
  * ├── 1.9s   : state=3, 第三条消息翻译 (+0.2s)
- * └── ~3s    : 所有翻译完成
- * 
- * ⚠️ 生命周期管理：
- * - onCreate: 设置布局
- * - onStart: 初始化控制器（确保每次进入都重新初始化）
- * - onPause: 暂停动画和 Handler 回调
- * - onStop: 释放控制器资源
- * - onDestroy: 最终清理（双重保险）
+ * └── ~3s    : 所有翻译完成，等待后重新开始
+ *
+ * 参考 AndroidPlayerActivity 的简洁设计，不过度封装。
  */
 class OnboardingStateMachineActivity : ComponentActivity() {
-    private lateinit var binding: OnbardingStateMachineBinding
+
     companion object {
         private const val TAG = "OnboardingActivity"
+
+        // 状态机配置
+        private const val STATE_MACHINE_NAME = "StateMachine_1"
+        private const val INPUT_STATE = "state"
+        private const val INPUT_LENGTH_1 = "length_1"
+        private const val INPUT_LENGTH_2 = "length_2"
+        private const val INPUT_LENGTH_3 = "length_3"
+
+        // Text Run 名称
+        private const val TEXT_CONTENT_1 = "Content_1"
+        private const val TEXT_CONTENT_2 = "Content_2"
+        private const val TEXT_CONTENT_3 = "Content_3"
+        private const val TEXT_TRANSLATED_1 = "Translated_1"
+        private const val TEXT_TRANSLATED_2 = "Translated_2"
+        private const val TEXT_TRANSLATED_3 = "Translated_3"
+
+        // 动画时序（毫秒）
+        private const val DELAY_BEFORE_TRANSLATE = 1500L   // 弹出完成后等待
+        private const val DELAY_BETWEEN_ITEMS = 200L       // 翻译项之间间隔
+        private const val DELAY_BEFORE_LOOP = 3000L        // 完成后等待，然后循环
+
+        // 文本宽度计算
+        private const val LENGTH_PIXELS_PER_CHAR = 9f
     }
 
-    // ✅ 修复：使用可空类型，避免未初始化使用
-    private var animationController: OnboardingAnimationController? = null
-    
-    // ✅ 修复：添加标志位，防止重复初始化
-    private var isInitialized = false
+    private lateinit var binding: OnbardingStateMachineBinding
+    private val handler = Handler(Looper.getMainLooper())
+
+    // 翻译数据
+    private val translatedTexts = listOf(
+        "Hi! Welcome to Intent.",
+        "We'll make any language readable for you.",
+        "And it works in a blink!"
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = OnbardingStateMachineBinding.inflate(layoutInflater)
         setEdgeToEdgeContent(binding.root)
-        Log.d(TAG, "onCreate called")
-    }
-    
-    /**
-     * ✅ 修复：在 onStart 中初始化，确保每次进入都正确设置
-     * 
-     * 为什么在 onStart 而不是 onCreate？
-     * - onCreate 只在 Activity 首次创建时调用
-     * - onStart 在每次 Activity 变为可见时调用
-     * - 这样可以确保从其他 Activity 返回时也能正确初始化
-     */
-    override fun onStart() {
-        super.onStart()
-        Log.d(TAG, "onStart called")
-        
-        if (!isInitialized) {
-            // 延迟初始化，确保 View 完全准备好
-            binding.onboardingStateMachine.postDelayed({
-                if (!isDestroyed && !isFinishing) {
-                    initializeController()
-                }
-            }, 100) // 100ms 延迟确保 RiveAnimationView 已完全加载
-        }
-    }
-    
-    /**
-     * ✅ 新增：初始化控制器的统一方法
-     */
-    private fun initializeController() {
-        if (isInitialized) {
-            Log.w(TAG, "Controller already initialized, skipping")
-            return
-        }
-        
-        try {
-            Log.d(TAG, "Initializing controller...")
-            
-            // 创建动画控制器
-            animationController = OnboardingAnimationController(binding.onboardingStateMachine)
 
-            // 调试：打印 Rive 文件信息
-            animationController?.printDebugInfo()
-            printRiveFileInfo(binding.onboardingStateMachine)
-            
-            // 初始化动画数据
-            initializeAnimation()
-            
-            // 设置按钮事件
-            setupButtons()
-            
-            isInitialized = true
-            Log.d(TAG, "Controller initialized successfully")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize controller", e)
-            isInitialized = false
-        }
+        // 设置监听器（可选，用于调试）
+        setupListener()
+
+        // 设置文本内容（在状态机启动前设置 Text Run）
+        setupTextContent()
+
+        Log.d(TAG, "onCreate - 等待状态机自动启动")
     }
 
-    /**
-     * 初始化动画数据
-     */
-    private fun initializeAnimation() {
-        // 准备翻译数据（实际项目中应从翻译接口获取）
-        val translationData = TranslationData(
-            targetLanguage = "en",  // 目标语言：英语
-            contents = listOf(
-                ContentItem(
-                    original = "Salut ! Bienvenue à Intent.",
-                    translated = "Hi! Welcome to Intent."
-                ),
-                ContentItem(
-                    original = "우린 어떤 언어든 읽게 해줘요.",
-                    translated = "We'll make any language readable for you."
-                ),
-                ContentItem(
-                    original = "而且一眨眼就好！",
-                    translated = "And it works in a blink!"
-                )
-            )
-        )
-
-        // 初始化动画
-        animationController?.initialize(translationData)
-        
-        // ✅ 确保状态机正在播放
-        if (!binding.onboardingStateMachine.isPlaying) {
-            Log.d(TAG, "State machine not playing, starting it...")
-            binding.onboardingStateMachine.play()
-        }
-        
-        Log.d(TAG, "Animation initialized, isPlaying=${binding.onboardingStateMachine.isPlaying}")
-    }
-
-    /**
-     * 设置按钮点击事件
-     */
-    private fun setupButtons() {
-        // 自动播放按钮：播放完整动画序列（包括 1.5s 延迟后自动翻译）
-        binding.btnAutoPlay.setOnClickListener {
-            Log.d(TAG, "Auto play button clicked")
-            animationController?.reset()
-            initializeAnimation()
-            animationController?.playFullSequence()
-            updateButtonStates(isPlaying = true)
-        }
-        
-        // 手动翻译按钮：立即开始翻译动画
-        binding.btnTranslate.setOnClickListener {
-            Log.d(TAG, "Translate button clicked")
-            animationController?.playTranslationSequence()
-            updateButtonStates(isPlaying = true)
-        }
-
-        // 重置按钮
-        binding.btnReset.setOnClickListener {
-            Log.d(TAG, "Reset button clicked")
-            animationController?.reset()
-            initializeAnimation()
-            updateButtonStates(isPlaying = false)
-        }
-
-        // 初始状态
-        updateButtonStates(isPlaying = false)
-    }
-    
-    private fun updateButtonStates(isPlaying: Boolean) {
-        binding.btnAutoPlay.isEnabled = !isPlaying
-        binding.btnTranslate.isEnabled = !isPlaying
-        binding.btnReset.isEnabled = isPlaying
-    }
-    
-    /**
-     * ✅ 新增：在 onPause 中暂停动画和 Handler 回调
-     * 
-     * 为什么需要在 onPause 暂停？
-     * - 用户按 Home 键或切换到其他 App 时，Activity 会暂停
-     * - 继续运行动画和 Handler 会浪费资源
-     * - 避免在后台执行 UI 操作导致崩溃
-     */
-    override fun onPause() {
-        super.onPause()
-        Log.d(TAG, "onPause called - pausing animation and handlers")
-        
-        // 暂停 Rive 动画播放
-        binding.onboardingStateMachine.pause()
-        
-        // 取消所有延迟任务（防止 Handler 泄漏）
-        animationController?.reset()
-    }
-    
-    /**
-     * ✅ 新增：在 onResume 中可以恢复动画（如果需要）
-     */
     override fun onResume() {
         super.onResume()
-        Log.d(TAG, "onResume called")
-        // 注意：这里不自动恢复播放，由用户点击按钮控制
-        // 如果需要自动恢复，可以添加状态保存和恢复逻辑
+        Log.d(TAG, "onResume - 开始动画循环")
+
+        // 状态机由 XML 的 app:riveStateMachine 自动启动
+        // 我们只需要设置 Number 参数并开始循环
+        handler.post {
+            setupLengthInputs()
+            startAnimationLoop()
+        }
     }
-    
-    /**
-     * ✅ 新增：在 onStop 中清理控制器
-     * 
-     * 为什么在 onStop 而不只在 onDestroy？
-     * - onStop 表示 Activity 完全不可见
-     * - 此时应该释放所有资源
-     * - onDestroy 可能不会及时调用（系统内存紧张时）
-     * - 这样可以确保资源及时释放，避免内存泄漏
-     */
-    override fun onStop() {
-        super.onStop()
-        Log.d(TAG, "onStop called - releasing controller")
-        
-        // 释放控制器资源
-        animationController?.release()
-        animationController = null
-        isInitialized = false
-        
-        // 注意：不需要手动释放 RiveAnimationView
-        // 它会在 onDetachedFromWindow 时自动清理
+
+    override fun onPause() {
+        super.onPause()
+        Log.d(TAG, "onPause - 停止动画循环")
+        handler.removeCallbacksAndMessages(null)
     }
 
     /**
-     * ✅ 改进：在 onDestroy 中确保彻底清理（双重保险）
+     * 设置文本内容
+     *
+     * setTextRunValue 不需要状态机，可以在 onCreate 中直接设置
      */
-    override fun onDestroy() {
-        Log.d(TAG, "onDestroy called - final cleanup")
-        
-        // 双重保险：确保释放资源（防止 onStop 未执行）
-        animationController?.release()
-        animationController = null
-        isInitialized = false
-        
-        super.onDestroy()
+    private fun setupTextContent() {
+        val riveView = binding.onboardingStateMachine
+
+        // 原文（默认语言）
+        trySetTextRun(TEXT_CONTENT_1, "¡Hola! Bienvenido a Intent.")
+        trySetTextRun(TEXT_CONTENT_2, "우린 어떤 언어든 읽게 해줘요.")
+        trySetTextRun(TEXT_CONTENT_3, "而且一眨眼就好！")
+
+        // 翻译后的文本
+        trySetTextRun(TEXT_TRANSLATED_1, translatedTexts[0])
+        trySetTextRun(TEXT_TRANSLATED_2, translatedTexts[1])
+        trySetTextRun(TEXT_TRANSLATED_3, translatedTexts[2])
+
+        Log.d(TAG, "文本内容已设置")
+    }
+
+    /**
+     * 设置长度参数
+     *
+     * setNumberState 需要状态机已启动，在 onResume 中调用
+     */
+    private fun setupLengthInputs() {
+        val riveView = binding.onboardingStateMachine
+
+        translatedTexts.forEachIndexed { index, text ->
+            val length = text.length * LENGTH_PIXELS_PER_CHAR
+            val inputName = when (index) {
+                0 -> INPUT_LENGTH_1
+                1 -> INPUT_LENGTH_2
+                2 -> INPUT_LENGTH_3
+                else -> return@forEachIndexed
+            }
+            riveView.setNumberState(STATE_MACHINE_NAME, inputName, length)
+            Log.d(TAG, "Set $inputName = $length")
+        }
+    }
+
+    /**
+     * 开始动画循环
+     */
+    private fun startAnimationLoop() {
+        Log.d(TAG, "开始一次动画循环")
+
+        // state=0: 弹出动画已经由状态机 Entry State 自动播放
+        // 我们只需要在适当的时机设置 state=1,2,3
+
+        // 1.5s 后：state=1
+        handler.postDelayed({
+            setStateValue(1f)
+
+            // 1.7s 后：state=2
+            handler.postDelayed({
+                setStateValue(2f)
+
+                // 1.9s 后：state=3
+                handler.postDelayed({
+                    setStateValue(3f)
+
+                    // 完成后等待，然后重新开始循环
+                    handler.postDelayed({
+                        resetAndLoop()
+                    }, DELAY_BEFORE_LOOP)
+
+                }, DELAY_BETWEEN_ITEMS)
+            }, DELAY_BETWEEN_ITEMS)
+        }, DELAY_BEFORE_TRANSLATE)
+    }
+
+    /**
+     * 重置并重新开始循环
+     */
+    private fun resetAndLoop() {
+        Log.d(TAG, "重置并重新开始循环")
+
+        val riveView = binding.onboardingStateMachine
+
+        // 重置 Artboard 回到初始状态
+        riveView.reset()
+
+        // 重新启动状态机
+        riveView.play(STATE_MACHINE_NAME, Loop.LOOP, isStateMachine = true)
+
+        // 重新设置参数
+        setupLengthInputs()
+
+        // 开始新一轮循环
+        startAnimationLoop()
+    }
+
+    private fun setStateValue(value: Float) {
+        binding.onboardingStateMachine.setNumberState(STATE_MACHINE_NAME, INPUT_STATE, value)
+        Log.d(TAG, "Set state = $value")
+    }
+
+    private fun trySetTextRun(name: String, value: String) {
+        try {
+            binding.onboardingStateMachine.setTextRunValue(name, value)
+        } catch (e: Exception) {
+            Log.w(TAG, "设置 TextRun '$name' 失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 设置监听器（调试用）
+     */
+    private fun setupListener() {
+        binding.onboardingStateMachine.registerListener(object : RiveFileController.Listener {
+            override fun notifyPlay(animation: PlayableInstance) {
+                Log.d(TAG, "Event: Play ${animation.name}")
+            }
+
+            override fun notifyPause(animation: PlayableInstance) {
+                Log.d(TAG, "Event: Pause ${animation.name}")
+            }
+
+            override fun notifyStop(animation: PlayableInstance) {
+                Log.d(TAG, "Event: Stop ${animation.name}")
+            }
+
+            override fun notifyLoop(animation: PlayableInstance) {
+                Log.d(TAG, "Event: Loop ${animation.name}")
+            }
+
+            override fun notifyStateChanged(stateMachineName: String, stateName: String) {
+                Log.d(TAG, "Event: State Changed - $stateMachineName: $stateName")
+            }
+        })
     }
 }
