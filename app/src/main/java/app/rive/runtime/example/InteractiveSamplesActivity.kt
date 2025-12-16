@@ -4,19 +4,15 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.ComponentActivity
 import app.rive.runtime.example.utils.RiveInfoUtil.printRiveFileInfo
+import app.rive.runtime.example.utils.setEdgeToEdgeContent
 import app.rive.runtime.kotlin.RiveAnimationView
 import app.rive.runtime.kotlin.controllers.RiveFileController
 import app.rive.runtime.kotlin.core.RiveEvent
-import app.rive.runtime.kotlin.core.RiveGeneralEvent
-import app.rive.runtime.kotlin.core.SMIBoolean
-import app.rive.runtime.kotlin.core.SMINumber
-import app.rive.runtime.kotlin.core.SMITrigger
 import java.util.Calendar
 
-class InteractiveSamplesActivity : AppCompatActivity() {
+class InteractiveSamplesActivity : ComponentActivity() {
     private var keepGoing = true
     fun setTime() {
         val hours =
@@ -28,7 +24,8 @@ class InteractiveSamplesActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.interactive_samples)
+        setEdgeToEdgeContent(R.layout.interactive_samples)
+
         setTime()
         val h = Handler(Looper.getMainLooper())
         h.postDelayed(object : Runnable {
