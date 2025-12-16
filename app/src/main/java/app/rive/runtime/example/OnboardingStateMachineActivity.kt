@@ -2,12 +2,11 @@ package app.rive.runtime.example
 
 import android.os.Bundle
 import android.util.Log
-import android.widget.Button
 import androidx.activity.ComponentActivity
-import androidx.appcompat.app.AppCompatActivity
+import app.rive.runtime.example.databinding.OnbardingStateMachineBinding
+import app.rive.runtime.example.databinding.TextRunDemoBinding
 import app.rive.runtime.example.utils.RiveInfoUtil.printRiveFileInfo
 import app.rive.runtime.example.utils.setEdgeToEdgeContent
-import app.rive.runtime.kotlin.RiveAnimationView
 
 /**
  * Onboarding 动画示例 Activity
@@ -32,25 +31,9 @@ import app.rive.runtime.kotlin.RiveAnimationView
  * - onDestroy: 最终清理（双重保险）
  */
 class OnboardingStateMachineActivity : ComponentActivity() {
-
+    private lateinit var binding: OnbardingStateMachineBinding
     companion object {
         private const val TAG = "OnboardingActivity"
-    }
-
-    private val animationView by lazy(LazyThreadSafetyMode.NONE) {
-        findViewById<RiveAnimationView>(R.id.onboarding_state_machine)
-    }
-
-    private val autoPlayButton by lazy(LazyThreadSafetyMode.NONE) {
-        findViewById<Button>(R.id.btn_auto_play)
-    }
-
-    private val translateButton by lazy(LazyThreadSafetyMode.NONE) {
-        findViewById<Button>(R.id.btn_translate)
-    }
-
-    private val resetButton by lazy(LazyThreadSafetyMode.NONE) {
-        findViewById<Button>(R.id.btn_reset)
     }
 
     // ✅ 修复：使用可空类型，避免未初始化使用
@@ -61,7 +44,8 @@ class OnboardingStateMachineActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setEdgeToEdgeContent(R.layout.onbarding_state_machine)
+        binding = OnbardingStateMachineBinding.inflate(layoutInflater)
+        setEdgeToEdgeContent(binding.root)
         Log.d(TAG, "onCreate called")
     }
     
@@ -79,7 +63,7 @@ class OnboardingStateMachineActivity : ComponentActivity() {
         
         if (!isInitialized) {
             // 延迟初始化，确保 View 完全准备好
-            animationView.postDelayed({
+            binding.onboardingStateMachine.postDelayed({
                 if (!isDestroyed && !isFinishing) {
                     initializeController()
                 }
@@ -100,11 +84,11 @@ class OnboardingStateMachineActivity : ComponentActivity() {
             Log.d(TAG, "Initializing controller...")
             
             // 创建动画控制器
-            animationController = OnboardingAnimationController(animationView)
+            animationController = OnboardingAnimationController(binding.onboardingStateMachine)
 
             // 调试：打印 Rive 文件信息
             animationController?.printDebugInfo()
-            printRiveFileInfo(animationView)
+            printRiveFileInfo(binding.onboardingStateMachine)
             
             // 初始化动画数据
             initializeAnimation()
@@ -147,12 +131,12 @@ class OnboardingStateMachineActivity : ComponentActivity() {
         animationController?.initialize(translationData)
         
         // ✅ 确保状态机正在播放
-        if (!animationView.isPlaying) {
+        if (!binding.onboardingStateMachine.isPlaying) {
             Log.d(TAG, "State machine not playing, starting it...")
-            animationView.play()
+            binding.onboardingStateMachine.play()
         }
         
-        Log.d(TAG, "Animation initialized, isPlaying=${animationView.isPlaying}")
+        Log.d(TAG, "Animation initialized, isPlaying=${binding.onboardingStateMachine.isPlaying}")
     }
 
     /**
@@ -160,7 +144,7 @@ class OnboardingStateMachineActivity : ComponentActivity() {
      */
     private fun setupButtons() {
         // 自动播放按钮：播放完整动画序列（包括 1.5s 延迟后自动翻译）
-        autoPlayButton.setOnClickListener {
+        binding.btnAutoPlay.setOnClickListener {
             Log.d(TAG, "Auto play button clicked")
             animationController?.reset()
             initializeAnimation()
@@ -169,14 +153,14 @@ class OnboardingStateMachineActivity : ComponentActivity() {
         }
         
         // 手动翻译按钮：立即开始翻译动画
-        translateButton.setOnClickListener {
+        binding.btnTranslate.setOnClickListener {
             Log.d(TAG, "Translate button clicked")
             animationController?.playTranslationSequence()
             updateButtonStates(isPlaying = true)
         }
 
         // 重置按钮
-        resetButton.setOnClickListener {
+        binding.btnReset.setOnClickListener {
             Log.d(TAG, "Reset button clicked")
             animationController?.reset()
             initializeAnimation()
@@ -188,9 +172,9 @@ class OnboardingStateMachineActivity : ComponentActivity() {
     }
     
     private fun updateButtonStates(isPlaying: Boolean) {
-        autoPlayButton.isEnabled = !isPlaying
-        translateButton.isEnabled = !isPlaying
-        resetButton.isEnabled = isPlaying
+        binding.btnAutoPlay.isEnabled = !isPlaying
+        binding.btnTranslate.isEnabled = !isPlaying
+        binding.btnReset.isEnabled = isPlaying
     }
     
     /**
@@ -206,7 +190,7 @@ class OnboardingStateMachineActivity : ComponentActivity() {
         Log.d(TAG, "onPause called - pausing animation and handlers")
         
         // 暂停 Rive 动画播放
-        animationView.pause()
+        binding.onboardingStateMachine.pause()
         
         // 取消所有延迟任务（防止 Handler 泄漏）
         animationController?.reset()
