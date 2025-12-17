@@ -8,6 +8,7 @@
     tools:context=".OnboardingStateMachineActivity">
 
     <!-- Rive 动画视图 - 自动循环播放 -->
+    <!-- 注意：riveResource 和 riveStateMachine 在代码中设置，以便先配置字体加载器 -->
     <app.rive.runtime.kotlin.RiveAnimationView
         android:id="@+id/onboarding_state_machine"
         android:layout_width="300dp"
@@ -18,8 +19,6 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:riveAutoPlay="true"
-        app:riveFit="COVER"
-        app:riveResource="@raw/onboarding_part_1_with_font"
-        app:riveStateMachine="StateMachine_1" />
+        app:riveFit="COVER" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
