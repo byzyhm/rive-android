@@ -2,6 +2,7 @@ package app.rive.runtime.example
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.widget.Button
 import androidx.activity.ComponentActivity
 import app.rive.runtime.example.utils.setEdgeToEdgeContent
@@ -54,6 +55,7 @@ class MainActivity : ComponentActivity() {
 
         buttonsData.forEach { pair ->
             findViewById<Button>(pair.first).setOnClickListener {
+                Log.d("OnboardingActivity", "点击跳转时间：${System.currentTimeMillis()}")
                 startActivity(Intent(this, pair.second))
             }
         }

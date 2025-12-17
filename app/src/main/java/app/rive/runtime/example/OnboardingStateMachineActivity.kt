@@ -6,15 +6,10 @@ import android.os.Looper
 import android.util.Log
 import androidx.activity.ComponentActivity
 import app.rive.runtime.example.databinding.OnbardingStateMachineBinding
+import app.rive.runtime.example.font.FontPreloader
 import app.rive.runtime.example.utils.setEdgeToEdgeContent
 import app.rive.runtime.kotlin.controllers.RiveFileController
-import app.rive.runtime.kotlin.core.FileAsset
-import app.rive.runtime.kotlin.core.FileAssetLoader
-import app.rive.runtime.kotlin.core.FontAsset
 import app.rive.runtime.kotlin.core.PlayableInstance
-import app.rive.runtime.kotlin.fonts.FontFallbackStrategy
-import app.rive.runtime.kotlin.fonts.FontHelper
-import app.rive.runtime.kotlin.fonts.Fonts
 
 /**
  * Onboarding 动画示例 Activity（简化版）
@@ -31,7 +26,7 @@ import app.rive.runtime.kotlin.fonts.Fonts
  *
  * 参考 AndroidPlayerActivity 的简洁设计，不过度封装。
  */
-class OnboardingStateMachineActivity : ComponentActivity(), FontFallbackStrategy {
+class OnboardingStateMachineActivity : ComponentActivity() {
 
     companion object {
         private const val TAG = "OnboardingActivity"
@@ -62,7 +57,6 @@ class OnboardingStateMachineActivity : ComponentActivity(), FontFallbackStrategy
 
     private lateinit var binding: OnbardingStateMachineBinding
     private val handler = Handler(Looper.getMainLooper())
-    private lateinit var fontLoader: SystemFontLoader
 
     // 翻译数据
     private val translatedTexts = listOf(
@@ -76,17 +70,13 @@ class OnboardingStateMachineActivity : ComponentActivity(), FontFallbackStrategy
         binding = OnbardingStateMachineBinding.inflate(layoutInflater)
         setEdgeToEdgeContent(binding.root)
 
-        // 设置字体回退策略（支持多语言：中文、韩文、阿拉伯文等）
-        // FontFallbackStrategy 会在遇到缺失字符时自动查找系统中支持该字符的字体
-        FontFallbackStrategy.stylePicker = this
+        // 字体回退策略已在 RiveExampleApplication 中全局设置
+        // 使用 FontPreloader 预加载的字体，避免在此处同步加载导致卡顿
 
-        // 创建字体加载器（使用系统字体替代 OOB 字体）
-        fontLoader = SystemFontLoader()
-
-        // 设置字体加载器并重新加载 Rive 文件
+        // 设置字体加载器（使用 FontPreloader 中的静态类，避免内存泄漏）
         // 必须在 setRiveResource 之前设置 assetLoader
         val riveView = binding.onboardingStateMachine
-        riveView.setAssetLoader(fontLoader)
+        riveView.setAssetLoader(FontPreloader.createFontAssetLoader())
         riveView.setRiveResource(
             resId = R.raw.onboarding_part_1_unfont,
             stateMachineName = STATE_MACHINE_NAME,
@@ -262,56 +252,4 @@ class OnboardingStateMachineActivity : ComponentActivity(), FontFallbackStrategy
         })
     }
 
-    /**
-     * 系统字体加载器
-     * 
-     * 当 Rive 文件中的字体资源缺失时（Out-of-Band 字体），
-     * 使用此加载器提供系统默认字体作为基础字体。
-     */
-    private inner class SystemFontLoader : FileAssetLoader() {
-        override fun loadContents(asset: FileAsset, inBandBytes: ByteArray): Boolean {
-            if (asset is FontAsset) {
-                Log.d(TAG, "加载 OOB 字体资源: ${asset.name}")
-                
-                // 使用系统默认字体作为基础字体
-                val fontBytes = FontHelper.getFallbackFontBytes(Fonts.FontOpts.DEFAULT)
-                if (fontBytes != null) {
-                    Log.d(TAG, "使用系统默认字体: ${fontBytes.size} bytes")
-                    return asset.decode(fontBytes)
-                }
-                
-                // 如果获取系统字体失败，回退到 roboto.ttf
-                Log.w(TAG, "无法获取系统字体，使用 roboto.ttf 作为回退")
-                resources.openRawResource(R.raw.roboto).use { inputStream ->
-                    return asset.decode(inputStream.readBytes())
-                }
-            }
-            return false
-        }
-    }
-
-    /**
-     * 实现 FontFallbackStrategy 接口
-     * 
-     * 当基础字体不支持某个字符时（如中文、韩文），
-     * Rive 运行时会调用此方法获取回退字体列表。
-     * 系统会按顺序尝试这些字体，直到找到支持该字符的字体。
-     */
-    override fun getFont(weight: Fonts.Weight): List<ByteArray> {
-        Log.d(TAG, "FontFallbackStrategy: 查找 weight=$weight 的回退字体")
-        
-        // 获取所有系统回退字体（包括中文、韩文、阿拉伯文等）
-        val fallbackFonts = FontHelper.getFallbackFonts(
-            Fonts.FontOpts(weight = weight)
-        )
-        
-        Log.d(TAG, "找到 ${fallbackFonts.size} 个回退字体")
-        
-        // 将字体转换为 ByteArray 列表
-        return fallbackFonts.mapNotNull { font ->
-            FontHelper.getFontBytes(font)?.also {
-                Log.d(TAG, "加载回退字体: ${font.name} (${it.size} bytes)")
-            }
-        }
-    }
 }
