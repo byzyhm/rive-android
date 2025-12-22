@@ -38,6 +38,8 @@ android {
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             getIsDefault().set(true)
             signingConfig = signingConfigs.debug
+            // 当依赖的模块没有 preview 构建类型时，回退到 debug
+            matchingFallbacks = ['debug']
         }
     }
 
