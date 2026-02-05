@@ -10,11 +10,9 @@
     <!-- 注意：riveResource 和 riveStateMachine 在代码中设置，以便先配置字体加载器 -->
     <app.rive.runtime.kotlin.RiveAnimationView
         android:id="@+id/aiGlowRiv"
-        android:layout_width="300dp"
-        android:layout_height="0dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_marginTop="100dp"
-
-        app:layout_constraintDimensionRatio="h,390.0:600.0"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
@@ -27,10 +25,113 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_margin="13dp"
+        android:visibility="visible"
         android:background="#FFFFFF"
         app:layout_constraintBottom_toBottomOf="@+id/aiGlowRiv"
         app:layout_constraintEnd_toEndOf="@+id/aiGlowRiv"
         app:layout_constraintStart_toStartOf="@+id/aiGlowRiv"
         app:layout_constraintTop_toTopOf="@+id/aiGlowRiv" />
+
+    <!-- 控制面板 -->
+    <LinearLayout
+        android:id="@+id/controlPanel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:background="@android:color/white"
+        android:elevation="4dp"
+        android:orientation="vertical"
+        android:padding="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <!-- Width 控制 -->
+        <TextView
+            android:id="@+id/widthLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Width: 338 (125-474)"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnDecreaseWidth"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:text="-" />
+
+            <SeekBar
+                android:id="@+id/widthSeekBar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:max="349"
+                android:progress="213" />
+
+            <Button
+                android:id="@+id/btnIncreaseWidth"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:text="+" />
+        </LinearLayout>
+
+        <!-- Height 控制 -->
+        <TextView
+            android:id="@+id/heightLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Height: 332 (120-973)"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnDecreaseHeight"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:text="-" />
+
+            <SeekBar
+                android:id="@+id/heightSeekBar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:max="853"
+                android:progress="212" />
+
+            <Button
+                android:id="@+id/btnIncreaseHeight"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:text="+" />
+        </LinearLayout>
+
+        <!-- 重置按钮 -->
+        <Button
+            android:id="@+id/btnReset"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="重置" />
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
