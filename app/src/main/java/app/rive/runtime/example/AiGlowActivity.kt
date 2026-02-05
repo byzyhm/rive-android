@@ -4,8 +4,10 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.util.TypedValue
 import android.widget.SeekBar
 import androidx.activity.ComponentActivity
+import androidx.constraintlayout.widget.ConstraintSet
 import app.rive.runtime.example.databinding.ActivityAiGlowBinding
 import app.rive.runtime.example.utils.setEdgeToEdgeContent
 import app.rive.runtime.kotlin.core.Fit
@@ -63,6 +65,9 @@ class AiGlowActivity : ComponentActivity() {
             // 设置初始的 width 和 height 值
             controller.setNumberState("StateMachine_1", "width", WIDTH_INITIAL)
             controller.setNumberState("StateMachine_1", "height", HEIGHT_INITIAL)
+            
+            // 设置初始View尺寸
+            updateViewSize(WIDTH_INITIAL, HEIGHT_INITIAL)
             
             Log.d(TAG, "状态机初始化完成: width=$WIDTH_INITIAL, height=$HEIGHT_INITIAL")
         } catch (e: Exception) {
@@ -146,6 +151,10 @@ class AiGlowActivity : ComponentActivity() {
         try {
             binding.aiGlowRiv.controller.setNumberState("StateMachine_1", "width", width)
             binding.widthLabel.text = "Width: ${width.toInt()} (${WIDTH_MIN.toInt()}-${WIDTH_MAX.toInt()})"
+            
+            // 更新 View 的实际宽度（内部框宽度 + 左右边距各13dp）
+//            updateViewSize(width, currentHeight)
+            
             Log.d(TAG, "更新宽度: $width")
         } catch (e: Exception) {
             Log.e(TAG, "更新宽度失败", e)
@@ -159,10 +168,65 @@ class AiGlowActivity : ComponentActivity() {
         try {
             binding.aiGlowRiv.controller.setNumberState("StateMachine_1", "height", height)
             binding.heightLabel.text = "Height: ${height.toInt()} (${HEIGHT_MIN.toInt()}-${HEIGHT_MAX.toInt()})"
+            
+            // 更新 View 的实际高度（内部框高度 + 上下边距各13dp）
+//            updateViewSize(currentWidth, height)
+            
             Log.d(TAG, "更新高度: $height")
         } catch (e: Exception) {
             Log.e(TAG, "更新高度失败", e)
         }
+    }
+
+    /**
+     * 使用 ConstraintSet 更新 aiGlowRiv 和 contentV 的实际尺寸
+     * 动画起始点在前景空白框左上各13px的位置
+     * 所以 aiGlowRiv 尺寸 = 内部框尺寸 + 边距*2
+     * contentV 尺寸 = 内部框尺寸
+     */
+    private fun updateViewSize(innerWidth: Float, innerHeight: Float) {
+        try {
+            val constraintLayout = binding.root
+            val constraintSet = ConstraintSet()
+            constraintSet.clone(constraintLayout)
+            
+            // 计算 aiGlowRiv 的实际尺寸（dp）
+            // 内部框宽度/高度 + 左右/上下各13dp的边距
+            val riveViewWidthDp = (innerWidth + 26).toInt()
+            val riveViewHeightDp = (innerHeight + 26).toInt()
+            
+            // 将dp转换为px
+            val riveWidthPx = dpToPx(riveViewWidthDp.toFloat()).toInt()
+            val riveHeightPx = dpToPx(riveViewHeightDp.toFloat()).toInt()
+            
+            // 设置 aiGlowRiv 的宽高约束
+            constraintSet.constrainWidth(R.id.aiGlowRiv, riveWidthPx)
+            constraintSet.constrainHeight(R.id.aiGlowRiv, riveHeightPx)
+            
+            // 设置 contentV 的宽高（等于内部框尺寸）
+//            val contentWidthPx = dpToPx(innerWidth).toInt()
+//            val contentHeightPx = dpToPx(innerHeight).toInt()
+//            constraintSet.constrainWidth(R.id.contentV, contentWidthPx)
+//            constraintSet.constrainHeight(R.id.contentV, contentHeightPx)
+            
+            // 应用约束
+            constraintSet.applyTo(constraintLayout)
+            
+            Log.d(TAG, "更新View尺寸: innerWidth=$innerWidth, innerHeight=$innerHeight, riveViewSize=${riveViewWidthDp}x${riveViewHeightDp}dp, contentSize=${innerWidth.toInt()}x${innerHeight.toInt()}dp")
+        } catch (e: Exception) {
+            Log.e(TAG, "更新View尺寸失败", e)
+        }
+    }
+
+    /**
+     * dp转px
+     */
+    private fun dpToPx(dp: Float): Float {
+        return TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            dp,
+            resources.displayMetrics
+        )
     }
 
     override fun onResume() {
