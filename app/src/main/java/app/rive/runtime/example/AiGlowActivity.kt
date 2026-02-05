@@ -17,12 +17,12 @@ class AiGlowActivity : ComponentActivity() {
     companion object {
         private const val TAG = "AiGlowActivity"
         
-        // Width 范围: 125-474(dp)
+        // Width 范围: 125-474
         private const val WIDTH_MIN = 125f
         private const val WIDTH_MAX = 474f
         private const val WIDTH_INITIAL = 338f
         
-        // Height 范围: 120-973(dp)
+        // Height 范围: 120-973
         private const val HEIGHT_MIN = 120f
         private const val HEIGHT_MAX = 973f
         private const val HEIGHT_INITIAL = 332f
@@ -33,6 +33,11 @@ class AiGlowActivity : ComponentActivity() {
     // 当前的宽高值
     private var currentWidth = WIDTH_INITIAL
     private var currentHeight = HEIGHT_INITIAL
+    
+    // 用于防抖的 Handler 和 Runnable
+    private val updateHandler = Handler(Looper.getMainLooper())
+    private var updateRunnable: Runnable? = null
+    private val UPDATE_DELAY = 50L // 50ms 防抖延迟
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,9 +71,7 @@ class AiGlowActivity : ComponentActivity() {
             controller.setNumberState("StateMachine_1", "width", WIDTH_INITIAL)
             controller.setNumberState("StateMachine_1", "height", HEIGHT_INITIAL)
             
-            // 设置初始View尺寸
-            updateViewSize(WIDTH_INITIAL, HEIGHT_INITIAL)
-            
+
             Log.d(TAG, "状态机初始化完成: width=$WIDTH_INITIAL, height=$HEIGHT_INITIAL")
         } catch (e: Exception) {
             Log.e(TAG, "初始化状态机失败", e)
@@ -82,14 +85,7 @@ class AiGlowActivity : ComponentActivity() {
         // Width SeekBar
         binding.widthSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                currentWidth = WIDTH_MIN + progress
-                updateWidth(currentWidth)
-                
-                // 打印 aiGlowRiv 的实际宽高
-                val view = binding.aiGlowRiv
-                view.post {
-                    Log.d(TAG, "Width SeekBar - aiGlowRiv实际宽高: width=${view.width}px, height=${view.height}px, measuredWidth=${view.measuredWidth}px, measuredHeight=${view.measuredHeight}px")
-                }
+
             }
 
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -98,29 +94,18 @@ class AiGlowActivity : ComponentActivity() {
 
         // Width 减少按钮
         binding.btnDecreaseWidth.setOnClickListener {
-            currentWidth = (currentWidth - 10).coerceIn(WIDTH_MIN, WIDTH_MAX)
-            binding.widthSeekBar.progress = (currentWidth - WIDTH_MIN).toInt()
-            updateWidth(currentWidth)
+
         }
 
         // Width 增加按钮
         binding.btnIncreaseWidth.setOnClickListener {
-            currentWidth = (currentWidth + 10).coerceIn(WIDTH_MIN, WIDTH_MAX)
-            binding.widthSeekBar.progress = (currentWidth - WIDTH_MIN).toInt()
-            updateWidth(currentWidth)
+
         }
 
         // Height SeekBar
         binding.heightSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                currentHeight = HEIGHT_MIN + progress
-                updateHeight(currentHeight)
-                
-                // 打印 aiGlowRiv 的实际宽高
-                val view = binding.aiGlowRiv
-                view.post {
-                    Log.d(TAG, "Height SeekBar - aiGlowRiv实际宽高: width=${view.width}px, height=${view.height}px, measuredWidth=${view.measuredWidth}px, measuredHeight=${view.measuredHeight}px")
-                }
+
             }
 
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -129,86 +114,19 @@ class AiGlowActivity : ComponentActivity() {
 
         // Height 减少按钮
         binding.btnDecreaseHeight.setOnClickListener {
-            currentHeight = (currentHeight - 10).coerceIn(HEIGHT_MIN, HEIGHT_MAX)
-            binding.heightSeekBar.progress = (currentHeight - HEIGHT_MIN).toInt()
-            updateHeight(currentHeight)
+
         }
 
         // Height 增加按钮
         binding.btnIncreaseHeight.setOnClickListener {
-            currentHeight = (currentHeight + 10).coerceIn(HEIGHT_MIN, HEIGHT_MAX)
-            binding.heightSeekBar.progress = (currentHeight - HEIGHT_MIN).toInt()
-            updateHeight(currentHeight)
+
         }
 
         // 重置按钮
         binding.btnReset.setOnClickListener {
-            currentWidth = WIDTH_INITIAL
-            currentHeight = HEIGHT_INITIAL
-            binding.widthSeekBar.progress = (WIDTH_INITIAL - WIDTH_MIN).toInt()
-            binding.heightSeekBar.progress = (HEIGHT_INITIAL - HEIGHT_MIN).toInt()
-            updateWidth(currentWidth)
-            updateHeight(currentHeight)
+
         }
 
-        // 初始化标签
-        updateWidth(currentWidth)
-        updateHeight(currentHeight)
-    }
-
-    /**
-     * 更新宽度值
-     */
-    private fun updateWidth(width: Float) {
-        try {
-            binding.aiGlowRiv.controller.setNumberState("StateMachine_1", "width", width)
-            binding.widthLabel.text = "Width: ${width.toInt()} (${WIDTH_MIN.toInt()}-${WIDTH_MAX.toInt()})"
-            
-            updateViewSize(width, currentHeight)
-            
-            Log.d(TAG, "更新宽度: $width")
-        } catch (e: Exception) {
-            Log.e(TAG, "更新宽度失败", e)
-        }
-    }
-
-    /**
-     * 更新高度值
-     */
-    private fun updateHeight(height: Float) {
-        try {
-            binding.aiGlowRiv.controller.setNumberState("StateMachine_1", "height", height)
-            binding.heightLabel.text = "Height: ${height.toInt()} (${HEIGHT_MIN.toInt()}-${HEIGHT_MAX.toInt()})"
-            
-            updateViewSize(currentWidth, height)
-            
-            Log.d(TAG, "更新高度: $height")
-        } catch (e: Exception) {
-            Log.e(TAG, "更新高度失败", e)
-        }
-    }
-
-    private fun updateViewSize(width: Float, height: Float) {
-        try {
-            val constraintLayout = binding.root
-            val constraintSet = ConstraintSet()
-            constraintSet.clone(constraintLayout)
-            
-            // 将 dp 转换为 px
-            val widthPx = dpToPx(width).toInt()
-            val heightPx = dpToPx(height).toInt()
-            
-            // 设置 aiGlowRiv 的宽高约束（使用 px 值）
-            constraintSet.constrainWidth(R.id.aiGlowRiv, widthPx)
-            constraintSet.constrainHeight(R.id.aiGlowRiv, heightPx)
-            
-            // 应用约束
-            constraintSet.applyTo(constraintLayout)
-            
-            Log.d(TAG, "更新View尺寸: width=${width}dp (${widthPx}px), height=${height}dp (${heightPx}px)")
-        } catch (e: Exception) {
-            Log.e(TAG, "更新View尺寸失败", e)
-        }
     }
 
     /**
@@ -222,12 +140,43 @@ class AiGlowActivity : ComponentActivity() {
         )
     }
 
-    override fun onResume() {
-        super.onResume()
-    }
-
     override fun onPause() {
         super.onPause()
+        try {
+            // 暂停 Rive 动画
+            binding.aiGlowRiv.pause()
+            Log.d(TAG, "Rive 动画已暂停")
+        } catch (e: Exception) {
+            Log.e(TAG, "暂停动画失败", e)
+        }
+    }
+    
+    override fun onResume() {
+        super.onResume()
+        try {
+            // 恢复 Rive 动画
+            binding.aiGlowRiv.play()
+            Log.d(TAG, "Rive 动画已恢复")
+        } catch (e: Exception) {
+            Log.e(TAG, "恢复动画失败", e)
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            // 清理防抖任务
+            updateRunnable?.let { updateHandler.removeCallbacks(it) }
+            updateRunnable = null
+            
+            // 停止并销毁 Rive 动画
+            binding.aiGlowRiv.stop()
+//            binding.aiGlowRiv.destroyRenderer()
+            
+            Log.d(TAG, "资源已清理")
+        } catch (e: Exception) {
+            Log.e(TAG, "清理资源失败", e)
+        }
     }
 
 //    fun Float.dpToPx(): Float {
