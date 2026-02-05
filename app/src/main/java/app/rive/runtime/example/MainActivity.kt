@@ -30,6 +30,7 @@ class MainActivity : ComponentActivity() {
         Pair(R.id.go_http, HttpActivity::class.java),
         Pair(R.id.go_simple_state_machine, SimpleStateMachineActivity::class.java),
         Pair(R.id.go_onboarding_state_machine, OnboardingStateMachineActivity::class.java),
+        Pair(R.id.go_AiGlowActivity, AiGlowActivity::class.java),
         Pair(R.id.go_nested_input, NestedInputActivity::class.java),
         Pair(R.id.go_nested_text_run, NestedTextRunActivity::class.java),
         Pair(R.id.go_button, ButtonActivity::class.java),

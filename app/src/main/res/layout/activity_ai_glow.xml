@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#f5f5f5">
+
+    <!-- Rive 动画视图 - 自动循环播放 -->
+    <!-- 注意：riveResource 和 riveStateMachine 在代码中设置，以便先配置字体加载器 -->
+    <app.rive.runtime.kotlin.RiveAnimationView
+        android:id="@+id/aiGlowRiv"
+        android:layout_width="300dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="100dp"
+
+        app:layout_constraintDimensionRatio="h,390.0:600.0"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:riveAutoPlay="true"
+        app:riveFit="COVER"
+        app:riveResource="@raw/ai_glow"
+        app:riveStateMachine="StateMachine_1" />
+
+    <View
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_margin="13dp"
+        android:background="#FFFFFF"
+        app:layout_constraintBottom_toBottomOf="@+id/aiGlowRiv"
+        app:layout_constraintEnd_toEndOf="@+id/aiGlowRiv"
+        app:layout_constraintStart_toStartOf="@+id/aiGlowRiv"
+        app:layout_constraintTop_toTopOf="@+id/aiGlowRiv" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

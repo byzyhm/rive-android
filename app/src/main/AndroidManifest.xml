@@ -89,7 +89,9 @@
             android:exported="true" />
         <activity
             android:name=".SimpleStateMachineActivity"
-            android:exported="true" /><activity android:name=".OnboardingStateMachineActivity" />
+            android:exported="true" />
+        <activity android:name=".OnboardingStateMachineActivity" />
+        <activity android:name=".AiGlowActivity" />
         <activity android:name=".TextRunDemoActivity" />
         <activity android:name=".NestedInputActivity"
             android:exported="true" />
