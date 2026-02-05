@@ -194,16 +194,18 @@ class AiGlowActivity : ComponentActivity() {
             val constraintSet = ConstraintSet()
             constraintSet.clone(constraintLayout)
             
-
+            // 将 dp 转换为 px
+            val widthPx = dpToPx(width).toInt()
+            val heightPx = dpToPx(height).toInt()
             
-            // 设置 aiGlowRiv 的宽高约束
-            constraintSet.constrainWidth(R.id.aiGlowRiv, width.toInt())
-            constraintSet.constrainHeight(R.id.aiGlowRiv, height.toInt())
+            // 设置 aiGlowRiv 的宽高约束（使用 px 值）
+            constraintSet.constrainWidth(R.id.aiGlowRiv, widthPx)
+            constraintSet.constrainHeight(R.id.aiGlowRiv, heightPx)
             
             // 应用约束
             constraintSet.applyTo(constraintLayout)
             
-//            Log.d(TAG, "更新View尺寸: innerWidth=$width, innerHeight=$height, riveViewSize=${riveViewWidthDp}x${riveViewHeightDp}dp, contentSize=${width.toInt()}x${height.toInt()}dp")
+            Log.d(TAG, "更新View尺寸: width=${width}dp (${widthPx}px), height=${height}dp (${heightPx}px)")
         } catch (e: Exception) {
             Log.e(TAG, "更新View尺寸失败", e)
         }
@@ -228,12 +230,12 @@ class AiGlowActivity : ComponentActivity() {
         super.onPause()
     }
 
-    fun Float.dpToPx(): Float {
-        return TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_DIP,
-            this,
-            resources.displayMetrics
-        )
-    }
+//    fun Float.dpToPx(): Float {
+//        return TypedValue.applyDimension(
+//            TypedValue.COMPLEX_UNIT_DIP,
+//            this,
+//            resources.displayMetrics
+//        )
+//    }
 
 }
