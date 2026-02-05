@@ -66,15 +66,74 @@ class AiGlowActivity : ComponentActivity() {
         )
         riveView.fit = Fit.FILL
         
+        // 添加验证代码：检查 View 和 Artboard 的尺寸
+        riveView.post {
+            verifyViewAndArtboardSizes()
+        }
+        
         // 延迟一下，等待状态机初始化完成
 //        Handler(Looper.getMainLooper()).postDelayed({
 //            initializeStateMachine()
 //            setupControls()
 //            // 应用初始的 View 尺寸
-//            updateViewSize()
+//            // updateViewSize()  // 先不改变尺寸，保持 XML 中的 300dp 以便验证
 //        }, 100)
     }
 
+    /**
+     * 验证 View 和 Artboard 的尺寸信息
+     */
+    private fun verifyViewAndArtboardSizes() {
+        try {
+            val riveView = binding.aiGlowRiv
+            val controller = riveView.controller
+            val artboard = controller.activeArtboard
+            
+            Log.d(TAG, "========== 尺寸验证信息 ==========")
+            
+            // View 的实际尺寸
+            Log.d(TAG, "View 实际宽度: ${riveView.width}px (${riveView.width / resources.displayMetrics.density}dp)")
+            Log.d(TAG, "View 实际高度: ${riveView.height}px (${riveView.height / resources.displayMetrics.density}dp)")
+            
+            // View 的 LayoutParams
+            riveView.layoutParams?.let { params ->
+                Log.d(TAG, "LayoutParams 宽度: ${params.width}")
+                Log.d(TAG, "LayoutParams 高度: ${params.height}")
+            }
+            
+            // Artboard 信息
+            artboard?.let {
+                val bounds = it.bounds
+                Log.d(TAG, "Artboard 宽度: ${it.width}")
+                Log.d(TAG, "Artboard 高度: ${it.height}")
+                Log.d(TAG, "Artboard bounds: left=${bounds.left}, top=${bounds.top}, right=${bounds.right}, bottom=${bounds.bottom}")
+                Log.d(TAG, "Artboard bounds 尺寸: ${bounds.width()} x ${bounds.height()}")
+                
+                // 宽高比分析
+                val artboardRatio = bounds.width() / bounds.height()
+                val viewRatio = riveView.width.toFloat() / riveView.height.toFloat()
+                Log.d(TAG, "Artboard 宽高比: ${String.format("%.3f", artboardRatio)} (${bounds.width()}:${bounds.height()})")
+                Log.d(TAG, "View 宽高比: ${String.format("%.3f", viewRatio)} (${riveView.width}:${riveView.height})")
+                Log.d(TAG, "宽高比匹配: ${if (Math.abs(artboardRatio - viewRatio) < 0.01f) "✅ 匹配" else "❌ 不匹配"}")
+            } ?: Log.w(TAG, "Artboard 尚未加载")
+            
+            // Controller 信息
+            Log.d(TAG, "Fit 模式: ${controller.fit}")
+            Log.d(TAG, "Alignment: ${controller.alignment}")
+            Log.d(TAG, "Target bounds: ${controller.targetBounds}")
+            Log.d(TAG, "Artboard bounds (from controller): ${controller.artboardBounds}")
+            
+            // 屏幕密度信息
+            Log.d(TAG, "屏幕密度: ${resources.displayMetrics.density}")
+            Log.d(TAG, "屏幕宽度: ${screenWidth}px (${screenWidth / resources.displayMetrics.density}dp)")
+            
+            Log.d(TAG, "==================================")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "验证尺寸信息失败", e)
+        }
+    }
+    
     /**
      * 初始化状态机的 Number 变量
      */
@@ -255,6 +314,25 @@ class AiGlowActivity : ComponentActivity() {
             binding.widthSeekBar.progress = WIDTH_SEEKBAR_INITIAL
             binding.heightSeekBar.progress = HEIGHT_SEEKBAR_INITIAL
             updateAnimationAndView()
+        }
+
+        // Fit 模式切换按钮
+        binding.btnFitFill.setOnClickListener {
+            binding.aiGlowRiv.fit = Fit.FILL
+            binding.fitModeLabel.text = "当前模式: FILL"
+            verifyViewAndArtboardSizes()
+        }
+
+        binding.btnFitContain.setOnClickListener {
+            binding.aiGlowRiv.fit = Fit.CONTAIN
+            binding.fitModeLabel.text = "当前模式: CONTAIN"
+            verifyViewAndArtboardSizes()
+        }
+
+        binding.btnFitCover.setOnClickListener {
+            binding.aiGlowRiv.fit = Fit.COVER
+            binding.fitModeLabel.text = "当前模式: COVER"
+            verifyViewAndArtboardSizes()
         }
     }
     
