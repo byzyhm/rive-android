@@ -8,17 +8,17 @@
 
     <!-- Rive 动画视图 - 自动循环播放 -->
     <!-- 注意：riveResource 和 riveStateMachine 在代码中设置，以便先配置字体加载器 -->
+    <!-- 宽高由代码动态控制，初始值会被 Activity 覆盖 -->
     <app.rive.runtime.kotlin.RiveAnimationView
         android:id="@+id/aiGlowRiv"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_marginTop="50dp"
-        app:layout_constraintDimensionRatio="h,338:332"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
+        app:riveFit="FILL"
         tools:riveAutoPlay="true"
-        tools:riveFit="COVER"
         tools:riveResource="@raw/ai_glow"
         tools:riveStateMachine="StateMachine_1" />
 

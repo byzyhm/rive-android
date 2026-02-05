@@ -4,10 +4,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.util.TypedValue
 import android.widget.SeekBar
 import androidx.activity.ComponentActivity
-import androidx.constraintlayout.widget.ConstraintSet
 import app.rive.runtime.example.databinding.ActivityAiGlowBinding
 import app.rive.runtime.example.utils.setEdgeToEdgeContent
 import app.rive.runtime.kotlin.core.Fit
@@ -17,32 +15,47 @@ class AiGlowActivity : ComponentActivity() {
     companion object {
         private const val TAG = "AiGlowActivity"
         
-        // Width 范围: 125-474
-        private const val WIDTH_MIN = 125f
-        private const val WIDTH_MAX = 474f
-        private const val WIDTH_INITIAL = 338f
+        // 动画图层宽度范围: 125-474
+        private const val ANIM_WIDTH_MIN = 125f
+        private const val ANIM_WIDTH_MAX = 474f
+        private const val ANIM_WIDTH_INITIAL = 338f
         
-        // Height 范围: 120-973
-        private const val HEIGHT_MIN = 120f
-        private const val HEIGHT_MAX = 973f
-        private const val HEIGHT_INITIAL = 332f
+        // 动画图层高度范围: 120-973
+        private const val ANIM_HEIGHT_MIN = 120f
+        private const val ANIM_HEIGHT_MAX = 973f
+        private const val ANIM_HEIGHT_INITIAL = 332f
+        
+        // SeekBar max 值
+        private const val WIDTH_SEEKBAR_MAX = 349  // 474 - 125
+        private const val HEIGHT_SEEKBAR_MAX = 853 // 973 - 120
+        
+        // SeekBar 初始 progress
+        private val WIDTH_SEEKBAR_INITIAL = (ANIM_WIDTH_INITIAL - ANIM_WIDTH_MIN).toInt()   // 213
+        private val HEIGHT_SEEKBAR_INITIAL = (ANIM_HEIGHT_INITIAL - ANIM_HEIGHT_MIN).toInt() // 212
     }
 
     private lateinit var binding: ActivityAiGlowBinding
     
-    // 当前的宽高值
-    private var currentWidth = WIDTH_INITIAL
-    private var currentHeight = HEIGHT_INITIAL
+    // 屏幕宽度
+    private var screenWidth: Int = 0
+    
+    // 当前的动画参数值
+    private var currentAnimWidth = ANIM_WIDTH_INITIAL
+    private var currentAnimHeight = ANIM_HEIGHT_INITIAL
     
     // 用于防抖的 Handler 和 Runnable
     private val updateHandler = Handler(Looper.getMainLooper())
     private var updateRunnable: Runnable? = null
-    private val UPDATE_DELAY = 50L // 50ms 防抖延迟
+    private val UPDATE_DELAY = 16L // 约60fps的更新频率
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityAiGlowBinding.inflate(layoutInflater)
         setEdgeToEdgeContent(binding.root)
+        
+        // 获取屏幕宽度
+        screenWidth = resources.displayMetrics.widthPixels
+        Log.d(TAG, "屏幕宽度: $screenWidth")
         
         // 设置 Rive 动画视图
         val riveView = binding.aiGlowRiv
@@ -57,6 +70,8 @@ class AiGlowActivity : ComponentActivity() {
         Handler(Looper.getMainLooper()).postDelayed({
             initializeStateMachine()
             setupControls()
+            // 应用初始的 View 尺寸
+            updateViewSize()
         }, 100)
     }
 
@@ -68,76 +83,190 @@ class AiGlowActivity : ComponentActivity() {
             val controller = binding.aiGlowRiv.controller
             
             // 设置初始的 width 和 height 值
-            controller.setNumberState("StateMachine_1", "width", WIDTH_INITIAL)
-            controller.setNumberState("StateMachine_1", "height", HEIGHT_INITIAL)
-            
+            controller.setNumberState("StateMachine_1", "width", ANIM_WIDTH_INITIAL)
+            controller.setNumberState("StateMachine_1", "height", ANIM_HEIGHT_INITIAL)
 
-            Log.d(TAG, "状态机初始化完成: width=$WIDTH_INITIAL, height=$HEIGHT_INITIAL")
+            Log.d(TAG, "状态机初始化完成: width=$ANIM_WIDTH_INITIAL, height=$ANIM_HEIGHT_INITIAL")
         } catch (e: Exception) {
             Log.e(TAG, "初始化状态机失败", e)
         }
+    }
+    
+    /**
+     * 根据动画参数计算 View 宽度
+     * viewWidth = screenWidth × (animWidth / 474)
+     */
+    private fun calculateViewWidth(animWidth: Float): Int {
+        return (screenWidth * animWidth / ANIM_WIDTH_MAX).toInt()
+    }
+    
+    /**
+     * 根据动画参数计算 View 高度
+     * viewHeight = screenWidth × (animHeight / 474)
+     * 注意：使用同一个比例因子 (screenWidth / 474) 保持动画比例
+     */
+    private fun calculateViewHeight(animHeight: Float): Int {
+        return (screenWidth * animHeight / ANIM_WIDTH_MAX).toInt()
+    }
+    
+    /**
+     * 根据 SeekBar progress 计算动画宽度参数
+     * animWidth = 125 + progress
+     */
+    private fun progressToAnimWidth(progress: Int): Float {
+        return ANIM_WIDTH_MIN + progress
+    }
+    
+    /**
+     * 根据 SeekBar progress 计算动画高度参数
+     * animHeight = 120 + progress
+     */
+    private fun progressToAnimHeight(progress: Int): Float {
+        return ANIM_HEIGHT_MIN + progress
+    }
+    
+    /**
+     * 更新 RiveAnimationView 的尺寸
+     */
+    private fun updateViewSize() {
+        val viewWidth = calculateViewWidth(currentAnimWidth)
+        val viewHeight = calculateViewHeight(currentAnimHeight)
+        
+        binding.aiGlowRiv.layoutParams = binding.aiGlowRiv.layoutParams.apply {
+            width = viewWidth
+            height = viewHeight
+        }
+        binding.aiGlowRiv.requestLayout()
+        
+        Log.d(TAG, "View尺寸更新: ${viewWidth}x${viewHeight}")
+    }
+    
+    /**
+     * 更新动画状态机参数和 View 尺寸
+     */
+    private fun updateAnimationAndView() {
+        try {
+            // 1. 更新动画状态机参数
+            val controller = binding.aiGlowRiv.controller
+            controller.setNumberState("StateMachine_1", "width", currentAnimWidth)
+            controller.setNumberState("StateMachine_1", "height", currentAnimHeight)
+            
+            // 2. 更新 View 尺寸
+            updateViewSize()
+            
+            // 3. 更新标签显示
+            updateLabels()
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "更新动画和View失败", e)
+        }
+    }
+    
+    /**
+     * 更新标签显示当前值
+     */
+    private fun updateLabels() {
+        binding.widthLabel.text = "Width: ${currentAnimWidth.toInt()} (${ANIM_WIDTH_MIN.toInt()}-${ANIM_WIDTH_MAX.toInt()})"
+        binding.heightLabel.text = "Height: ${currentAnimHeight.toInt()} (${ANIM_HEIGHT_MIN.toInt()}-${ANIM_HEIGHT_MAX.toInt()})"
     }
 
     /**
      * 设置控制按钮和滑块
      */
     private fun setupControls() {
+        // 设置 SeekBar 的 max 和初始 progress
+        binding.widthSeekBar.max = WIDTH_SEEKBAR_MAX
+        binding.widthSeekBar.progress = WIDTH_SEEKBAR_INITIAL
+        binding.heightSeekBar.max = HEIGHT_SEEKBAR_MAX
+        binding.heightSeekBar.progress = HEIGHT_SEEKBAR_INITIAL
+        
+        // 更新初始标签
+        updateLabels()
+        
         // Width SeekBar
         binding.widthSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-
+                if (fromUser) {
+                    currentAnimWidth = progressToAnimWidth(progress)
+                    scheduleUpdate()
+                }
             }
 
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                // 停止拖动时立即更新
+                updateAnimationAndView()
+            }
         })
 
         // Width 减少按钮
         binding.btnDecreaseWidth.setOnClickListener {
-
+            val newProgress = (binding.widthSeekBar.progress - 10).coerceAtLeast(0)
+            binding.widthSeekBar.progress = newProgress
+            currentAnimWidth = progressToAnimWidth(newProgress)
+            updateAnimationAndView()
         }
 
         // Width 增加按钮
         binding.btnIncreaseWidth.setOnClickListener {
-
+            val newProgress = (binding.widthSeekBar.progress + 10).coerceAtMost(WIDTH_SEEKBAR_MAX)
+            binding.widthSeekBar.progress = newProgress
+            currentAnimWidth = progressToAnimWidth(newProgress)
+            updateAnimationAndView()
         }
 
         // Height SeekBar
         binding.heightSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-
+                if (fromUser) {
+                    currentAnimHeight = progressToAnimHeight(progress)
+                    scheduleUpdate()
+                }
             }
 
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                // 停止拖动时立即更新
+                updateAnimationAndView()
+            }
         })
 
         // Height 减少按钮
         binding.btnDecreaseHeight.setOnClickListener {
-
+            val newProgress = (binding.heightSeekBar.progress - 10).coerceAtLeast(0)
+            binding.heightSeekBar.progress = newProgress
+            currentAnimHeight = progressToAnimHeight(newProgress)
+            updateAnimationAndView()
         }
 
         // Height 增加按钮
         binding.btnIncreaseHeight.setOnClickListener {
-
+            val newProgress = (binding.heightSeekBar.progress + 10).coerceAtMost(HEIGHT_SEEKBAR_MAX)
+            binding.heightSeekBar.progress = newProgress
+            currentAnimHeight = progressToAnimHeight(newProgress)
+            updateAnimationAndView()
         }
 
         // 重置按钮
         binding.btnReset.setOnClickListener {
-
+            // 重置到初始值
+            currentAnimWidth = ANIM_WIDTH_INITIAL
+            currentAnimHeight = ANIM_HEIGHT_INITIAL
+            binding.widthSeekBar.progress = WIDTH_SEEKBAR_INITIAL
+            binding.heightSeekBar.progress = HEIGHT_SEEKBAR_INITIAL
+            updateAnimationAndView()
         }
-
     }
-
+    
     /**
-     * dp转px
+     * 防抖调度更新（拖动过程中使用）
      */
-    private fun dpToPx(dp: Float): Float {
-        return TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_DIP,
-            dp,
-            resources.displayMetrics
-        )
+    private fun scheduleUpdate() {
+        updateRunnable?.let { updateHandler.removeCallbacks(it) }
+        updateRunnable = Runnable {
+            updateAnimationAndView()
+        }
+        updateHandler.postDelayed(updateRunnable!!, UPDATE_DELAY)
     }
 
     override fun onPause() {
@@ -171,20 +300,10 @@ class AiGlowActivity : ComponentActivity() {
             
             // 停止并销毁 Rive 动画
             binding.aiGlowRiv.stop()
-//            binding.aiGlowRiv.destroyRenderer()
             
             Log.d(TAG, "资源已清理")
         } catch (e: Exception) {
             Log.e(TAG, "清理资源失败", e)
         }
     }
-
-//    fun Float.dpToPx(): Float {
-//        return TypedValue.applyDimension(
-//            TypedValue.COMPLEX_UNIT_DIP,
-//            this,
-//            resources.displayMetrics
-//        )
-//    }
-
 }
