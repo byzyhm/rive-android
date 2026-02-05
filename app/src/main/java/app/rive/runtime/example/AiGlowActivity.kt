@@ -67,12 +67,12 @@ class AiGlowActivity : ComponentActivity() {
         riveView.fit = Fit.FILL
         
         // 延迟一下，等待状态机初始化完成
-        Handler(Looper.getMainLooper()).postDelayed({
-            initializeStateMachine()
-            setupControls()
-            // 应用初始的 View 尺寸
-            updateViewSize()
-        }, 100)
+//        Handler(Looper.getMainLooper()).postDelayed({
+//            initializeStateMachine()
+//            setupControls()
+//            // 应用初始的 View 尺寸
+//            updateViewSize()
+//        }, 100)
     }
 
     /**

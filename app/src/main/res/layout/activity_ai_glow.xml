@@ -11,8 +11,8 @@
     <!-- 宽高由代码动态控制，初始值会被 Activity 覆盖 -->
     <app.rive.runtime.kotlin.RiveAnimationView
         android:id="@+id/aiGlowRiv"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="300dp"
+        android:layout_height="300dp"
         android:layout_marginTop="50dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
