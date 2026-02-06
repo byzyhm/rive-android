@@ -51,11 +51,11 @@ class AiGlowActivity : ComponentActivity() {
     private lateinit var fullText: String
     private var currentTextLength = TEXT_LENGTH_INITIAL
     
-    // contentV 高度监听器
-    private var contentVLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
+    // anchorView 高度监听器
+    private var anchorListener: ViewTreeObserver.OnGlobalLayoutListener? = null
     
-    // 记录上一次的 contentV 高度，用于避免重复打印日志
-    private var lastContentVHeight: Int = -1
+    // 记录上一次的 anchorView 高度，用于避免重复打印日志
+    private var lastAnchorHeight: Int = -1
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -63,7 +63,7 @@ class AiGlowActivity : ComponentActivity() {
         setEdgeToEdgeContent(binding.root)
         
         // 保存完整文本
-        fullText = binding.contentV.text.toString()
+        fullText = binding.anchorView.text.toString()
         
         // 获取屏幕宽度
         screenWidth = resources.displayMetrics.widthPixels
@@ -88,32 +88,32 @@ class AiGlowActivity : ComponentActivity() {
         Handler(Looper.getMainLooper()).postDelayed({
             initializeStateMachine()
             setupControls()
-            setupContentVHeightListener() // 设置 contentV 高度监听
+            setupAnchorListener() // 设置 anchorView 高度监听
         }, 100)
     }
 
     /**
-     * 设置 contentV 高度监听器
-     * 实时监听 contentV 的高度变化，并根据高度更新状态机的 height 值
+     * 设置 anchorView 高度监听器
+     * 实时监听 anchorView 的高度变化，并根据高度更新状态机的 height 值
      * 
      * 计算逻辑：
-     * 1. contentV 的高度是屏幕像素单位
+     * 1. anchorView 的高度是屏幕像素单位
      * 2. 状态机的 height 变量是 Artboard 坐标系单位
      * 3. 需要将屏幕像素转换为 Artboard 坐标系
      * 
      * 计算公式：
      * - 变化系数 = Artboard宽度 / View实际宽度
-     * - 状态机 height = (contentV总高度 像素) × 系数 = Artboard坐标系中的高度
+     * - 状态机 height = (anchor总高度 像素) × 系数 = Artboard坐标系中的高度
      * 
-     * 这样 aiGlowRiv 就能一直作为 contentV 的背景
+     * 这样 aiGlowRiv 就能一直作为 anchorView 的背景
      */
-    private fun setupContentVHeightListener() {
-        contentVLayoutListener = ViewTreeObserver.OnGlobalLayoutListener {
-            val contentVHeight = binding.contentV.height
+    private fun setupAnchorListener() {
+        anchorListener = ViewTreeObserver.OnGlobalLayoutListener {
+            val anchorHeight = binding.anchorView.height
             
             // 只有当高度变化时才执行
-            if (contentVHeight > 0 && contentVHeight != lastContentVHeight) {
-                lastContentVHeight = contentVHeight
+            if (anchorHeight > 0 && anchorHeight != lastAnchorHeight) {
+                lastAnchorHeight = anchorHeight
                 
                 try {
                     // 获取 Artboard 的真实尺寸
@@ -133,18 +133,18 @@ class AiGlowActivity : ComponentActivity() {
                     val viewWidth = riveView.width
                     val viewHeight = riveView.height
                     
-                    // 将 20dp 转换为 px（上下各 10dp margin）
-                    val marginInPx = (0 * resources.displayMetrics.density).toInt()
+                    // 上下各 0dp margin，先设置个0，留作微调
+                    val marginInPx = 0
                     
-                    // contentV 实际占用的高度（包含 margin）
-                    val totalHeight = contentVHeight + marginInPx
+                    // anchorView 实际占用的高度（包含 margin）
+                    val totalHeight = anchorHeight + marginInPx
                     
                     // 计算变化系数：Artboard 坐标系与屏幕像素的比例
                     // 系数 = Artboard宽度 / View实际宽度
                     // 这样可以将屏幕像素转换为 Artboard 坐标系单位
                     val coefficient = artboardWidth / viewWidth.toFloat()
                     
-                    // 计算状态机 height 值：contentV总高度（像素） × 系数 = Artboard坐标系高度
+                    // 计算状态机 height 值：anchor总高度（像素） × 系数 = Artboard坐标系高度
                     val calculatedHeight = totalHeight * coefficient
                     
                     // 限制在 120-973 范围内
@@ -166,7 +166,7 @@ class AiGlowActivity : ComponentActivity() {
                     binding.heightSeekBar.progress = seekBarProgress
                     setupHeightSeekBarListener() // 重新设置监听器
                     
-                    Log.d(TAG, "contentV 高度变化: ${contentVHeight}px → 状态机 height: ${stateMachineHeight.toInt()}")
+                    Log.d(TAG, "anchorView 高度变化: ${anchorHeight}px → 状态机 height: ${stateMachineHeight.toInt()}")
                 } catch (e: Exception) {
                     Log.e(TAG, "更新状态机 height 失败", e)
                 }
@@ -174,19 +174,19 @@ class AiGlowActivity : ComponentActivity() {
         }
         
         // 添加监听器
-        binding.contentV.viewTreeObserver.addOnGlobalLayoutListener(contentVLayoutListener)
+        binding.anchorView.viewTreeObserver.addOnGlobalLayoutListener(anchorListener)
         
-        Log.d(TAG, "contentV 高度监听器已设置")
+        Log.d(TAG, "anchorView 高度监听器已设置")
     }
     
     /**
-     * 移除 contentV 高度监听器
+     * 移除 anchorView 高度监听器
      */
-    private fun removeContentVHeightListener() {
-        contentVLayoutListener?.let {
-            binding.contentV.viewTreeObserver.removeOnGlobalLayoutListener(it)
-            contentVLayoutListener = null
-            Log.d(TAG, "contentV 高度监听器已移除")
+    private fun removeAnchorListener() {
+        anchorListener?.let {
+            binding.anchorView.viewTreeObserver.removeOnGlobalLayoutListener(it)
+            anchorListener = null
+            Log.d(TAG, "anchorView 高度监听器已移除")
         }
     }
 
@@ -351,7 +351,7 @@ class AiGlowActivity : ComponentActivity() {
      */
     private fun updateTextContent() {
         val targetLength = (fullText.length * currentTextLength / 100.0).toInt()
-        binding.contentV.text = fullText.substring(0, targetLength.coerceAtMost(fullText.length))
+        binding.anchorView.text = fullText.substring(0, targetLength.coerceAtMost(fullText.length))
     }
 
     /**
@@ -496,8 +496,8 @@ class AiGlowActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         try {
-            // 移除 contentV 高度监听器
-            removeContentVHeightListener()
+            // 移除 anchorView 高度监听器
+            removeAnchorListener()
             
             // 停止并销毁 Rive 动画
             binding.aiGlowRiv.stop()

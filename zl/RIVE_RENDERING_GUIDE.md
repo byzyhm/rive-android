@@ -395,17 +395,17 @@ override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     setContentView(binding.root)
     
-    val height = binding.contentV.height  // ❌ 可能是 0，因为 View 还未布局
+    val height = binding.anchorView.height  // ❌ 可能是 0，因为 View 还未布局
 }
 
 // 正确：使用 ViewTreeObserver 或 post
-binding.contentV.viewTreeObserver.addOnGlobalLayoutListener {
-    val height = binding.contentV.height  // ✅ View 已经完成布局
+binding.anchorView.viewTreeObserver.addOnGlobalLayoutListener {
+    val height = binding.anchorView.height  // ✅ View 已经完成布局
 }
 
 // 或者
-binding.contentV.post {
-    val height = binding.contentV.height  // ✅
+binding.anchorView.post {
+    val height = binding.anchorView.height  // ✅
 }
 ```
 
