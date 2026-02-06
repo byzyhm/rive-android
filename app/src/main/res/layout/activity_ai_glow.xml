@@ -23,6 +23,7 @@
             android:id="@+id/aiGlowRiv"
             android:layout_width="0dp"
             android:layout_height="0dp"
+            app:layout_constraintDimensionRatio="h,474:973"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -41,7 +42,6 @@
             android:background="#FFFFFF"
             android:text="狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢"
             android:textSize="28dp"
-            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
