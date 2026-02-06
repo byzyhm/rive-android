@@ -8,6 +8,7 @@ import android.widget.SeekBar
 import androidx.activity.ComponentActivity
 import app.rive.runtime.example.databinding.ActivityAiGlowBinding
 import app.rive.runtime.example.utils.setEdgeToEdgeContent
+import app.rive.runtime.kotlin.core.Alignment
 import app.rive.runtime.kotlin.core.Fit
 
 class AiGlowActivity : ComponentActivity() {
@@ -68,8 +69,9 @@ class AiGlowActivity : ComponentActivity() {
             stateMachineName = "StateMachine_1",
             autoplay = true
         )
-        riveView.fit = Fit.FILL
-        
+        riveView.fit = Fit.CONTAIN
+        riveView.alignment = Alignment.TOP_LEFT
+
         // 添加验证代码：检查 View 和 Artboard 的尺寸
         riveView.post {
             verifyViewAndArtboardSizes()
