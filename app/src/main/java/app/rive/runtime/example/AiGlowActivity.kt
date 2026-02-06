@@ -134,7 +134,7 @@ class AiGlowActivity : ComponentActivity() {
                     val viewHeight = riveView.height
                     
                     // 将 20dp 转换为 px（上下各 10dp margin）
-                    val marginInPx = (20 * resources.displayMetrics.density).toInt()
+                    val marginInPx = (0 * resources.displayMetrics.density).toInt()
                     
                     // contentV 实际占用的高度（包含 margin）
                     val totalHeight = contentVHeight + marginInPx
