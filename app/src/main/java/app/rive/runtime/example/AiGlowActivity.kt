@@ -42,11 +42,6 @@ class AiGlowActivity : ComponentActivity() {
     // 当前的动画参数值
     private var currentAnimWidth = ANIM_WIDTH_INITIAL
     private var currentAnimHeight = ANIM_HEIGHT_INITIAL
-    
-    // 用于防抖的 Handler 和 Runnable
-    private val updateHandler = Handler(Looper.getMainLooper())
-    private var updateRunnable: Runnable? = null
-    private val UPDATE_DELAY = 16L // 约60fps的更新频率
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -306,46 +301,8 @@ class AiGlowActivity : ComponentActivity() {
             updateAnimationAndView()
         }
 
-        // 重置按钮
-        binding.btnReset.setOnClickListener {
-            // 重置到初始值
-            currentAnimWidth = ANIM_WIDTH_INITIAL
-            currentAnimHeight = ANIM_HEIGHT_INITIAL
-            binding.widthSeekBar.progress = WIDTH_SEEKBAR_INITIAL
-            binding.heightSeekBar.progress = HEIGHT_SEEKBAR_INITIAL
-            updateAnimationAndView()
-        }
-
-        // Fit 模式切换按钮
-        binding.btnFitFill.setOnClickListener {
-            binding.aiGlowRiv.fit = Fit.FILL
-            binding.fitModeLabel.text = "当前模式: FILL"
-            verifyViewAndArtboardSizes()
-        }
-
-        binding.btnFitContain.setOnClickListener {
-            binding.aiGlowRiv.fit = Fit.CONTAIN
-            binding.fitModeLabel.text = "当前模式: CONTAIN"
-            verifyViewAndArtboardSizes()
-        }
-
-        binding.btnFitCover.setOnClickListener {
-            binding.aiGlowRiv.fit = Fit.COVER
-            binding.fitModeLabel.text = "当前模式: COVER"
-            verifyViewAndArtboardSizes()
-        }
     }
     
-    /**
-     * 防抖调度更新（拖动过程中使用）
-     */
-    private fun scheduleUpdate() {
-        updateRunnable?.let { updateHandler.removeCallbacks(it) }
-        updateRunnable = Runnable {
-            updateAnimationAndView()
-        }
-        updateHandler.postDelayed(updateRunnable!!, UPDATE_DELAY)
-    }
 
     override fun onPause() {
         super.onPause()
@@ -372,10 +329,6 @@ class AiGlowActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         try {
-            // 清理防抖任务
-            updateRunnable?.let { updateHandler.removeCallbacks(it) }
-            updateRunnable = null
-            
             // 停止并销毁 Rive 动画
             binding.aiGlowRiv.stop()
             

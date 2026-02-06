@@ -129,64 +129,6 @@
                 android:text="+" />
         </LinearLayout>
 
-        <!-- 重置按钮 -->
-        <Button
-            android:id="@+id/btnReset"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="重置" />
-
-        <!-- Fit 模式切换 -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Fit 模式测试"
-            android:textSize="14sp"
-            android:textStyle="bold" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/btnFitFill"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="FILL"
-                android:textSize="11sp" />
-
-            <Button
-                android:id="@+id/btnFitContain"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:layout_weight="1"
-                android:text="CONTAIN"
-                android:textSize="11sp" />
-
-            <Button
-                android:id="@+id/btnFitCover"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="4dp"
-                android:layout_weight="1"
-                android:text="COVER"
-                android:textSize="11sp" />
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/fitModeLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="当前模式: COVER"
-            android:textColor="#FF0000"
-            android:textSize="12sp" />
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
