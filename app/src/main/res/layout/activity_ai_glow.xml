@@ -27,7 +27,7 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:riveFit="FILL"
+            tools:riveFit="FILL"
             tools:riveAutoPlay="true"
             tools:riveResource="@raw/ai_glow"
             tools:riveStateMachine="StateMachine_1" />
@@ -37,6 +37,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_margin="10dp"
+            android:visibility="visible"
             android:background="#FFFFFF"
             android:text="狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢"
             android:textSize="28dp"
@@ -135,6 +136,46 @@
 
             <Button
                 android:id="@+id/btnIncreaseHeight"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:text="+" />
+        </LinearLayout>
+
+        <!-- Text Length 控制 -->
+        <TextView
+            android:id="@+id/textLengthLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Text Length: 0"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnDecreaseTextLength"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:text="-" />
+
+            <SeekBar
+                android:id="@+id/textLengthSeekBar"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:max="100"
+                android:progress="100" />
+
+            <Button
+                android:id="@+id/btnIncreaseTextLength"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:text="+" />

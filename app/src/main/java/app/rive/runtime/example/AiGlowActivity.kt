@@ -28,10 +28,12 @@ class AiGlowActivity : ComponentActivity() {
         // SeekBar max 值
         private const val WIDTH_SEEKBAR_MAX = 349  // 474 - 125
         private const val HEIGHT_SEEKBAR_MAX = 853 // 973 - 120
+        private const val TEXT_LENGTH_MAX = 100    // 文本长度最大值
         
         // SeekBar 初始 progress
         private val WIDTH_SEEKBAR_INITIAL = (ANIM_WIDTH_INITIAL - ANIM_WIDTH_MIN).toInt()   // 213
         private val HEIGHT_SEEKBAR_INITIAL = (ANIM_HEIGHT_INITIAL - ANIM_HEIGHT_MIN).toInt() // 212
+        private const val TEXT_LENGTH_INITIAL = 100 // 文本长度初始值(100%)
     }
 
     private lateinit var binding: ActivityAiGlowBinding
@@ -42,11 +44,18 @@ class AiGlowActivity : ComponentActivity() {
     // 当前的动画参数值
     private var currentAnimWidth = ANIM_WIDTH_INITIAL
     private var currentAnimHeight = ANIM_HEIGHT_INITIAL
+    
+    // 文本内容
+    private lateinit var fullText: String
+    private var currentTextLength = TEXT_LENGTH_INITIAL
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityAiGlowBinding.inflate(layoutInflater)
         setEdgeToEdgeContent(binding.root)
+        
+        // 保存完整文本
+        fullText = binding.contentV.text.toString()
         
         // 获取屏幕宽度
         screenWidth = resources.displayMetrics.widthPixels
@@ -226,6 +235,15 @@ class AiGlowActivity : ComponentActivity() {
     private fun updateLabels() {
         binding.widthLabel.text = "Width: ${currentAnimWidth.toInt()} (${ANIM_WIDTH_MIN.toInt()}-${ANIM_WIDTH_MAX.toInt()})"
         binding.heightLabel.text = "Height: ${currentAnimHeight.toInt()} (${ANIM_HEIGHT_MIN.toInt()}-${ANIM_HEIGHT_MAX.toInt()})"
+        binding.textLengthLabel.text = "Text Length: $currentTextLength%"
+    }
+    
+    /**
+     * 更新文本内容的显示长度
+     */
+    private fun updateTextContent() {
+        val targetLength = (fullText.length * currentTextLength / 100.0).toInt()
+        binding.contentV.text = fullText.substring(0, targetLength.coerceAtMost(fullText.length))
     }
 
     /**
@@ -237,6 +255,8 @@ class AiGlowActivity : ComponentActivity() {
         binding.widthSeekBar.progress = WIDTH_SEEKBAR_INITIAL
         binding.heightSeekBar.max = HEIGHT_SEEKBAR_MAX
         binding.heightSeekBar.progress = HEIGHT_SEEKBAR_INITIAL
+        binding.textLengthSeekBar.max = TEXT_LENGTH_MAX
+        binding.textLengthSeekBar.progress = TEXT_LENGTH_INITIAL
         
         // 更新初始标签
         updateLabels()
@@ -299,6 +319,38 @@ class AiGlowActivity : ComponentActivity() {
             binding.heightSeekBar.progress = newProgress
             currentAnimHeight = progressToAnimHeight(newProgress)
             updateAnimationAndView()
+        }
+
+        // Text Length SeekBar
+        binding.textLengthSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    currentTextLength = progress
+                    updateTextContent()
+                    updateLabels()
+                }
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        // Text Length 减少按钮
+        binding.btnDecreaseTextLength.setOnClickListener {
+            val newProgress = (binding.textLengthSeekBar.progress - 5).coerceAtLeast(0)
+            binding.textLengthSeekBar.progress = newProgress
+            currentTextLength = newProgress
+            updateTextContent()
+            updateLabels()
+        }
+
+        // Text Length 增加按钮
+        binding.btnIncreaseTextLength.setOnClickListener {
+            val newProgress = (binding.textLengthSeekBar.progress + 5).coerceAtMost(TEXT_LENGTH_MAX)
+            binding.textLengthSeekBar.progress = newProgress
+            currentTextLength = newProgress
+            updateTextContent()
+            updateLabels()
         }
 
     }
