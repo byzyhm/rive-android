@@ -251,15 +251,13 @@ class AiGlowActivity : ComponentActivity() {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
                     currentAnimWidth = progressToAnimWidth(progress)
-                    scheduleUpdate()
+                    // 直接更新，不使用防抖，保证顺滑
+                    updateAnimationAndView()
                 }
             }
 
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                // 停止拖动时立即更新
-                updateAnimationAndView()
-            }
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
         // Width 减少按钮
@@ -283,15 +281,13 @@ class AiGlowActivity : ComponentActivity() {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
                     currentAnimHeight = progressToAnimHeight(progress)
-                    scheduleUpdate()
+                    // 直接更新，不使用防抖，保证顺滑
+                    updateAnimationAndView()
                 }
             }
 
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                // 停止拖动时立即更新
-                updateAnimationAndView()
-            }
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
         // Height 减少按钮
