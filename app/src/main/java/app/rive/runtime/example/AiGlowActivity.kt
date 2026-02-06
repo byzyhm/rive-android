@@ -53,6 +53,9 @@ class AiGlowActivity : ComponentActivity() {
     
     // contentV 高度监听器
     private var contentVLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
+    
+    // 记录上一次的 contentV 高度，用于避免重复打印日志
+    private var lastContentVHeight: Int = -1
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -108,7 +111,10 @@ class AiGlowActivity : ComponentActivity() {
         contentVLayoutListener = ViewTreeObserver.OnGlobalLayoutListener {
             val contentVHeight = binding.contentV.height
             
-            if (contentVHeight > 0) {
+            // 只有当高度变化时才执行
+            if (contentVHeight > 0 && contentVHeight != lastContentVHeight) {
+                lastContentVHeight = contentVHeight
+                
                 try {
                     // 获取 Artboard 的真实尺寸
                     val riveView = binding.aiGlowRiv
@@ -160,14 +166,7 @@ class AiGlowActivity : ComponentActivity() {
                     binding.heightSeekBar.progress = seekBarProgress
                     setupHeightSeekBarListener() // 重新设置监听器
                     
-                    Log.d(TAG, "========================================")
-                    Log.d(TAG, "Artboard 尺寸: ${artboardWidth} × ${artboardHeight}")
-                    Log.d(TAG, "View 尺寸: ${viewWidth}px × ${viewHeight}px")
-                    Log.d(TAG, "contentV 高度: ${contentVHeight}px, margin: ${marginInPx}px, 总高度: ${totalHeight}px")
-                    Log.d(TAG, "变化系数: $coefficient (Artboard宽度 ${artboardWidth} / View宽度 ${viewWidth})")
-                    Log.d(TAG, "计算: ${totalHeight}px × $coefficient = $calculatedHeight")
-                    Log.d(TAG, "状态机 height: $stateMachineHeight")
-                    Log.d(TAG, "========================================")
+                    Log.d(TAG, "contentV 高度变化: ${contentVHeight}px → 状态机 height: ${stateMachineHeight.toInt()}")
                 } catch (e: Exception) {
                     Log.e(TAG, "更新状态机 height 失败", e)
                 }
