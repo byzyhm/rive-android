@@ -12,13 +12,14 @@
     <!-- 添加了半透明红色背景以便查看 View 的实际边界 -->
     <app.rive.runtime.kotlin.RiveAnimationView
         android:id="@+id/aiGlowRiv"
-        android:layout_width="300dp"
-        android:layout_height="600dp"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
         android:layout_marginTop="50dp"
+        app:layout_constraintDimensionRatio="h,474:973"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:riveFit="COVER"
+        app:riveFit="FILL"
         tools:riveAutoPlay="true"
         tools:riveResource="@raw/ai_glow"
         tools:riveStateMachine="StateMachine_1" />

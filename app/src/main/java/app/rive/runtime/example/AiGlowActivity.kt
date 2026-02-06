@@ -72,12 +72,10 @@ class AiGlowActivity : ComponentActivity() {
         }
         
         // 延迟一下，等待状态机初始化完成
-//        Handler(Looper.getMainLooper()).postDelayed({
-//            initializeStateMachine()
-//            setupControls()
-//            // 应用初始的 View 尺寸
-//            // updateViewSize()  // 先不改变尺寸，保持 XML 中的 300dp 以便验证
-//        }, 100)
+        Handler(Looper.getMainLooper()).postDelayed({
+            initializeStateMachine()
+            setupControls()
+        }, 100)
     }
 
     /**
@@ -186,22 +184,31 @@ class AiGlowActivity : ComponentActivity() {
     
     /**
      * 更新 RiveAnimationView 的尺寸
+     * 使用 ConstraintSet 来动态修改约束
      */
     private fun updateViewSize() {
         val viewWidth = calculateViewWidth(currentAnimWidth)
         val viewHeight = calculateViewHeight(currentAnimHeight)
         
-        binding.aiGlowRiv.layoutParams = binding.aiGlowRiv.layoutParams.apply {
-            width = viewWidth
-            height = viewHeight
-        }
-        binding.aiGlowRiv.requestLayout()
+        // 获取父容器 ConstraintLayout
+        val constraintLayout = binding.root as androidx.constraintlayout.widget.ConstraintLayout
         
-        Log.d(TAG, "View尺寸更新: ${viewWidth}x${viewHeight}")
+        // 创建 ConstraintSet 并从当前布局克隆约束
+        val constraintSet = androidx.constraintlayout.widget.ConstraintSet()
+        constraintSet.clone(constraintLayout)
+        
+        // 修改宽度和高度约束
+        constraintSet.constrainWidth(R.id.aiGlowRiv, viewWidth)
+        constraintSet.constrainHeight(R.id.aiGlowRiv, viewHeight)
+        
+        // 应用新的约束
+        constraintSet.applyTo(constraintLayout)
+        
+        Log.d(TAG, "View尺寸更新(ConstraintSet): ${viewWidth}x${viewHeight}")
     }
     
     /**
-     * 更新动画状态机参数和 View 尺寸
+     * 更新动画状态机参数（不改变View尺寸）
      */
     private fun updateAnimationAndView() {
         try {
@@ -210,14 +217,11 @@ class AiGlowActivity : ComponentActivity() {
             controller.setNumberState("StateMachine_1", "width", currentAnimWidth)
             controller.setNumberState("StateMachine_1", "height", currentAnimHeight)
             
-            // 2. 更新 View 尺寸
-            updateViewSize()
-            
-            // 3. 更新标签显示
+            // 2. 更新标签显示
             updateLabels()
             
         } catch (e: Exception) {
-            Log.e(TAG, "更新动画和View失败", e)
+            Log.e(TAG, "更新动画状态机失败", e)
         }
     }
     
