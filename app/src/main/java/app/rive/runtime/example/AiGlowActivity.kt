@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.ViewTreeObserver
 import android.widget.SeekBar
 import androidx.activity.ComponentActivity
 import app.rive.runtime.example.databinding.ActivityAiGlowBinding
@@ -49,6 +50,9 @@ class AiGlowActivity : ComponentActivity() {
     // 文本内容
     private lateinit var fullText: String
     private var currentTextLength = TEXT_LENGTH_INITIAL
+    
+    // contentV 高度监听器
+    private var contentVLayoutListener: ViewTreeObserver.OnGlobalLayoutListener? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,7 +85,83 @@ class AiGlowActivity : ComponentActivity() {
         Handler(Looper.getMainLooper()).postDelayed({
             initializeStateMachine()
             setupControls()
+            setupContentVHeightListener() // 设置 contentV 高度监听
         }, 100)
+    }
+
+    /**
+     * 设置 contentV 高度监听器
+     * 实时监听 contentV 的高度变化，并根据高度更新状态机的 height 值
+     * 
+     * 计算公式：
+     * - aiGlowRiv 宽度 = 屏幕宽度
+     * - aiGlowRiv 高度 = 屏幕宽度 × (973/474)
+     * - 变化系数 = 474 / 屏幕宽度
+     * - 状态机 height = (contentV 高度 + 20dp) × 变化系数
+     * 
+     * 注意：contentV 在 XML 中设置了上下各 10dp 的 margin，需要加上
+     * 
+     * 这样 aiGlowRiv 就能一直作为 contentV 的背景
+     */
+    private fun setupContentVHeightListener() {
+        contentVLayoutListener = ViewTreeObserver.OnGlobalLayoutListener {
+            val contentVHeight = binding.contentV.height
+            
+            if (contentVHeight > 0) {
+                // 将 20dp 转换为 px（上下各 10dp margin）
+                val marginInPx = (20 * resources.displayMetrics.density).toInt()
+                
+                // contentV 实际占用的高度（包含 margin）
+                val totalHeight = contentVHeight + marginInPx
+                
+                // 计算变化系数：474 / 屏幕宽度
+                val coefficient = ANIM_WIDTH_MAX / screenWidth.toFloat()
+                
+                // 计算状态机 height 值：(contentV 高度 + 20dp) × 系数
+                val calculatedHeight = totalHeight * coefficient
+                
+                // 限制在 120-973 范围内
+                val stateMachineHeight = calculatedHeight.coerceIn(ANIM_HEIGHT_MIN, ANIM_HEIGHT_MAX)
+                
+                // 更新当前高度值（用于显示）
+                currentAnimHeight = stateMachineHeight
+                
+                // 更新状态机的 height 值
+                try {
+                    val controller = binding.aiGlowRiv.controller
+                    controller.setNumberState("StateMachine_1", "height", stateMachineHeight)
+                    
+                    // 同步更新 UI 显示
+                    binding.heightLabel.text = "Height: ${stateMachineHeight.toInt()} (${ANIM_HEIGHT_MIN.toInt()}-${ANIM_HEIGHT_MAX.toInt()}) [Auto]"
+                    
+                    // 同步更新 SeekBar（禁用监听器避免循环）
+                    val seekBarProgress = (stateMachineHeight - ANIM_HEIGHT_MIN).toInt()
+                    binding.heightSeekBar.setOnSeekBarChangeListener(null)
+                    binding.heightSeekBar.progress = seekBarProgress
+                    setupHeightSeekBarListener() // 重新设置监听器
+                    
+                    Log.d(TAG, "contentV 高度变化: ${contentVHeight}px + ${marginInPx}px (margin) = ${totalHeight}px -> 状态机 height: $stateMachineHeight (系数: $coefficient)")
+                } catch (e: Exception) {
+                    Log.e(TAG, "更新状态机 height 失败", e)
+                }
+            }
+        }
+        
+        // 添加监听器
+        binding.contentV.viewTreeObserver.addOnGlobalLayoutListener(contentVLayoutListener)
+        
+        Log.d(TAG, "contentV 高度监听器已设置")
+    }
+    
+    /**
+     * 移除 contentV 高度监听器
+     */
+    private fun removeContentVHeightListener() {
+        contentVLayoutListener?.let {
+            binding.contentV.viewTreeObserver.removeOnGlobalLayoutListener(it)
+            contentVLayoutListener = null
+            Log.d(TAG, "contentV 高度监听器已移除")
+        }
     }
 
     /**
@@ -249,6 +329,24 @@ class AiGlowActivity : ComponentActivity() {
     }
 
     /**
+     * 设置 Height SeekBar 监听器
+     */
+    private fun setupHeightSeekBarListener() {
+        binding.heightSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    currentAnimHeight = progressToAnimHeight(progress)
+                    // 直接更新，不使用防抖，保证顺滑
+                    updateAnimationAndView()
+                }
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+    }
+
+    /**
      * 设置控制按钮和滑块
      */
     private fun setupControls() {
@@ -294,18 +392,7 @@ class AiGlowActivity : ComponentActivity() {
         }
 
         // Height SeekBar
-        binding.heightSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) {
-                    currentAnimHeight = progressToAnimHeight(progress)
-                    // 直接更新，不使用防抖，保证顺滑
-                    updateAnimationAndView()
-                }
-            }
-
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
+        setupHeightSeekBarListener()
 
         // Height 减少按钮
         binding.btnDecreaseHeight.setOnClickListener {
@@ -383,6 +470,9 @@ class AiGlowActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         try {
+            // 移除 contentV 高度监听器
+            removeContentVHeightListener()
+            
             // 停止并销毁 Rive 动画
             binding.aiGlowRiv.stop()
             
