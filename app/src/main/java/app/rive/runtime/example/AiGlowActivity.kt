@@ -93,13 +93,14 @@ class AiGlowActivity : ComponentActivity() {
      * 设置 contentV 高度监听器
      * 实时监听 contentV 的高度变化，并根据高度更新状态机的 height 值
      * 
-     * 计算公式：
-     * - aiGlowRiv 宽度 = 屏幕宽度
-     * - aiGlowRiv 高度 = 屏幕宽度 × (973/474)
-     * - 变化系数 = 474 / 屏幕宽度
-     * - 状态机 height = (contentV 高度 + 20dp) × 变化系数
+     * 计算逻辑：
+     * 1. contentV 的高度是屏幕像素单位
+     * 2. 状态机的 height 变量是 Artboard 坐标系单位
+     * 3. 需要将屏幕像素转换为 Artboard 坐标系
      * 
-     * 注意：contentV 在 XML 中设置了上下各 10dp 的 margin，需要加上
+     * 计算公式：
+     * - 变化系数 = Artboard宽度 / View实际宽度
+     * - 状态机 height = (contentV总高度 像素) × 系数 = Artboard坐标系中的高度
      * 
      * 这样 aiGlowRiv 就能一直作为 contentV 的背景
      */
@@ -108,27 +109,46 @@ class AiGlowActivity : ComponentActivity() {
             val contentVHeight = binding.contentV.height
             
             if (contentVHeight > 0) {
-                // 将 20dp 转换为 px（上下各 10dp margin）
-                val marginInPx = (20 * resources.displayMetrics.density).toInt()
-                
-                // contentV 实际占用的高度（包含 margin）
-                val totalHeight = contentVHeight + marginInPx
-                
-                // 计算变化系数：474 / 屏幕宽度
-                val coefficient = ANIM_WIDTH_MAX / screenWidth.toFloat()
-                
-                // 计算状态机 height 值：(contentV 高度 + 20dp) × 系数
-                val calculatedHeight = totalHeight * coefficient
-                
-                // 限制在 120-973 范围内
-                val stateMachineHeight = calculatedHeight.coerceIn(ANIM_HEIGHT_MIN, ANIM_HEIGHT_MAX)
-                
-                // 更新当前高度值（用于显示）
-                currentAnimHeight = stateMachineHeight
-                
-                // 更新状态机的 height 值
                 try {
-                    val controller = binding.aiGlowRiv.controller
+                    // 获取 Artboard 的真实尺寸
+                    val riveView = binding.aiGlowRiv
+                    val artboard = riveView.controller.activeArtboard
+                    
+                    if (artboard == null) {
+                        Log.w(TAG, "Artboard 尚未加载，跳过此次更新")
+                        return@OnGlobalLayoutListener
+                    }
+                    
+                    val artboardBounds = artboard.bounds
+                    val artboardWidth = artboardBounds.width()
+                    val artboardHeight = artboardBounds.height()
+                    
+                    // 获取 View 的实际尺寸
+                    val viewWidth = riveView.width
+                    val viewHeight = riveView.height
+                    
+                    // 将 20dp 转换为 px（上下各 10dp margin）
+                    val marginInPx = (20 * resources.displayMetrics.density).toInt()
+                    
+                    // contentV 实际占用的高度（包含 margin）
+                    val totalHeight = contentVHeight + marginInPx
+                    
+                    // 计算变化系数：Artboard 坐标系与屏幕像素的比例
+                    // 系数 = Artboard宽度 / View实际宽度
+                    // 这样可以将屏幕像素转换为 Artboard 坐标系单位
+                    val coefficient = artboardWidth / viewWidth.toFloat()
+                    
+                    // 计算状态机 height 值：contentV总高度（像素） × 系数 = Artboard坐标系高度
+                    val calculatedHeight = totalHeight * coefficient
+                    
+                    // 限制在 120-973 范围内
+                    val stateMachineHeight = calculatedHeight.coerceIn(ANIM_HEIGHT_MIN, ANIM_HEIGHT_MAX)
+                    
+                    // 更新当前高度值（用于显示）
+                    currentAnimHeight = stateMachineHeight
+                    
+                    // 更新状态机的 height 值
+                    val controller = riveView.controller
                     controller.setNumberState("StateMachine_1", "height", stateMachineHeight)
                     
                     // 同步更新 UI 显示
@@ -140,7 +160,14 @@ class AiGlowActivity : ComponentActivity() {
                     binding.heightSeekBar.progress = seekBarProgress
                     setupHeightSeekBarListener() // 重新设置监听器
                     
-                    Log.d(TAG, "contentV 高度变化: ${contentVHeight}px + ${marginInPx}px (margin) = ${totalHeight}px -> 状态机 height: $stateMachineHeight (系数: $coefficient)")
+                    Log.d(TAG, "========================================")
+                    Log.d(TAG, "Artboard 尺寸: ${artboardWidth} × ${artboardHeight}")
+                    Log.d(TAG, "View 尺寸: ${viewWidth}px × ${viewHeight}px")
+                    Log.d(TAG, "contentV 高度: ${contentVHeight}px, margin: ${marginInPx}px, 总高度: ${totalHeight}px")
+                    Log.d(TAG, "变化系数: $coefficient (Artboard宽度 ${artboardWidth} / View宽度 ${viewWidth})")
+                    Log.d(TAG, "计算: ${totalHeight}px × $coefficient = $calculatedHeight")
+                    Log.d(TAG, "状态机 height: $stateMachineHeight")
+                    Log.d(TAG, "========================================")
                 } catch (e: Exception) {
                     Log.e(TAG, "更新状态机 height 失败", e)
                 }
