@@ -10,31 +10,42 @@
     <!-- 注意：riveResource 和 riveStateMachine 在代码中设置，以便先配置字体加载器 -->
     <!-- 宽高由代码动态控制，初始值会被 Activity 覆盖 -->
     <!-- 添加了半透明红色背景以便查看 View 的实际边界 -->
-    <app.rive.runtime.kotlin.RiveAnimationView
-        android:id="@+id/aiGlowRiv"
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/glowContainerCL"
         android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:layout_marginTop="50dp"
-        app:layout_constraintDimensionRatio="h,474:973"
+        android:layout_height="wrap_content"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:riveFit="FILL"
-        tools:riveAutoPlay="true"
-        tools:riveResource="@raw/ai_glow"
-        tools:riveStateMachine="StateMachine_1" />
+        app:layout_constraintTop_toTopOf="parent">
 
-    <View
-        android:id="@+id/contentV"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:layout_margin="13dp"
-        android:background="#FFFFFF"
-        android:visibility="gone"
-        app:layout_constraintBottom_toBottomOf="@+id/aiGlowRiv"
-        app:layout_constraintEnd_toEndOf="@+id/aiGlowRiv"
-        app:layout_constraintStart_toStartOf="@+id/aiGlowRiv"
-        app:layout_constraintTop_toTopOf="@+id/aiGlowRiv" />
+        <app.rive.runtime.kotlin.RiveAnimationView
+            android:id="@+id/aiGlowRiv"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:riveFit="FILL"
+            tools:riveAutoPlay="true"
+            tools:riveResource="@raw/ai_glow"
+            tools:riveStateMachine="StateMachine_1" />
+
+        <TextView
+            android:id="@+id/contentV"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_margin="10dp"
+            android:background="#FFFFFF"
+            android:text="狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢子呢狗子呢狗子呢狗子呢狗子呢狗子呢狗子呢"
+            android:textSize="28dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
     <!-- 控制面板 -->
     <LinearLayout
