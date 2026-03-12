@@ -10,6 +10,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import app.rive.Artboard
+import app.rive.Fit
 import app.rive.RiveDrawToBufferException
 import app.rive.RiveFile
 import app.rive.RiveFileException
@@ -19,11 +20,9 @@ import app.rive.ViewModelInstance
 import app.rive.ViewModelInstanceSource
 import app.rive.ViewModelSource
 import app.rive.core.RenderContextGL.Companion.TAG
-import app.rive.rememberCommandQueue
 import app.rive.rememberRiveFile
-import app.rive.runtime.kotlin.core.Alignment
+import app.rive.rememberRiveWorker
 import app.rive.runtime.kotlin.core.File.Enum
-import app.rive.runtime.kotlin.core.Fit
 import app.rive.runtime.kotlin.core.ViewModel
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +39,24 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.time.Duration
+
+/**
+ * [CommandQueue] is named to match the underlying core C++ class, which reflects its algorithm: a
+ * queue of commands that are dispatched to a command server which receives them and operates on
+ * Rive files.
+ *
+ * But for the purposes of a public API, it makes more sense to think of this less in terms of its
+ * algorithm and more in terms of its purpose, which is to dispatch work and manage memory for a
+ * worker thread. This type alias preserves the internal name to continue matching the C++ class it
+ * represents while also exposing a more semantic name for users.
+ */
+typealias RiveWorker = CommandQueue
+
+/**
+ * Additional alias for the interior type `RiveWorker.PropertyUpdate` due to not being accessible
+ * from [RiveWorker].
+ */
+typealias RivePropertyUpdate<T> = CommandQueue.PropertyUpdate<T>
 
 const val COMMAND_QUEUE_TAG = "Rive/CQ"
 
@@ -78,7 +95,7 @@ const val COMMAND_QUEUE_TAG = "Rive/CQ"
  * loaded into each command queue separately.
  *
  * A command queue needs to be polled to receive messages from the command server. This is handled
- * by the [rememberCommandQueue] composable or by calling [beginPolling].
+ * by the [rememberRiveWorker] composable or by calling [beginPolling].
  *
  * @param renderContext The [RenderContext] to use for rendering. Currently only OpenGL is
  *    supported. The CommandQueue takes ownership of the passed context.
@@ -90,364 +107,9 @@ class CommandQueue(
     private val renderContext: RenderContext = RenderContextGL(),
     private val bridge: CommandQueueBridge = CommandQueueJNIBridge(),
 ) : RefCounted {
-    private external fun cppPollMessages(pointer: Long)
-    private external fun cppGetArtboardNames(
-        pointer: Long,
-        requestID: Long,
-        fileHandle: Long
-    )
-
-    private external fun cppGetStateMachineNames(
-        pointer: Long,
-        requestID: Long,
-        artboardHandle: Long
-    )
-
-    private external fun cppGetViewModelNames(
-        pointer: Long,
-        requestID: Long,
-        fileHandle: Long
-    )
-
-    private external fun cppGetViewModelInstanceNames(
-        pointer: Long,
-        requestID: Long,
-        fileHandle: Long,
-        viewModelName: String
-    )
-
-    private external fun cppGetViewModelProperties(
-        pointer: Long,
-        requestID: Long,
-        fileHandle: Long,
-        viewModelName: String
-    )
-
-    private external fun cppGetEnums(
-        pointer: Long,
-        requestID: Long,
-        fileHandle: Long
-    )
-
-    private external fun cppCreateDefaultArtboard(
-        pointer: Long,
-        requestID: Long,
-        fileHandle: Long
-    ): Long
-
-    private external fun cppCreateArtboardByName(
-        pointer: Long,
-        requestID: Long,
-        fileHandle: Long,
-        name: String
-    ): Long
-
-    private external fun cppDeleteArtboard(pointer: Long, requestID: Long, artboardHandle: Long)
-
-    private external fun cppCreateDefaultStateMachine(
-        pointer: Long,
-        requestID: Long,
-        artboardHandle: Long
-    ): Long
-
-    private external fun cppCreateStateMachineByName(
-        pointer: Long,
-        requestID: Long,
-        artboardHandle: Long,
-        name: String
-    ): Long
-
-    private external fun cppDeleteStateMachine(
-        pointer: Long,
-        requestID: Long,
-        stateMachineHandle: Long
-    )
-
-    private external fun cppAdvanceStateMachine(
-        pointer: Long,
-        stateMachineHandle: Long,
-        deltaTimeNs: Long
-    )
-
-    private external fun cppNamedVMCreateBlankVMI(
-        pointer: Long,
-        requestID: Long,
-        fileHandle: Long,
-        viewModelName: String
-    ): Long
-
-    private external fun cppDefaultVMCreateBlankVMI(
-        pointer: Long,
-        requestID: Long,
-        fileHandle: Long,
-        artboardHandle: Long
-    ): Long
-
-    private external fun cppNamedVMCreateDefaultVMI(
-        pointer: Long,
-        requestID: Long,
-        fileHandle: Long,
-        viewModelName: String
-    ): Long
-
-    private external fun cppDefaultVMCreateDefaultVMI(
-        pointer: Long,
-        requestID: Long,
-        fileHandle: Long,
-        artboardHandle: Long
-    ): Long
-
-    private external fun cppNamedVMCreateNamedVMI(
-        pointer: Long,
-        requestID: Long,
-        fileHandle: Long,
-        viewModelName: String,
-        instanceName: String
-    ): Long
-
-    private external fun cppDefaultVMCreateNamedVMI(
-        pointer: Long,
-        requestID: Long,
-        fileHandle: Long,
-        artboardHandle: Long,
-        instanceName: String
-    ): Long
-
-    private external fun cppReferenceNestedVMI(
-        pointer: Long,
-        requestID: Long,
-        viewModelInstanceHandle: Long,
-        path: String
-    ): Long
-
-    private external fun cppDeleteViewModelInstance(
-        pointer: Long,
-        requestID: Long,
-        viewModelInstanceHandle: Long
-    )
-
-    private external fun cppBindViewModelInstance(
-        pointer: Long,
-        requestID: Long,
-        stateMachineHandle: Long,
-        viewModelInstanceHandle: Long,
-    )
-
-    private external fun cppSetNumberProperty(
-        pointer: Long,
-        viewModelInstanceHandle: Long,
-        propertyPath: String,
-        value: Float
-    )
-
-    private external fun cppGetNumberProperty(
-        pointer: Long,
-        requestID: Long,
-        viewModelInstanceHandle: Long,
-        propertyPath: String
-    )
-
-    private external fun cppSetStringProperty(
-        pointer: Long,
-        viewModelInstanceHandle: Long,
-        propertyPath: String,
-        value: String
-    )
-
-    private external fun cppGetStringProperty(
-        pointer: Long,
-        requestID: Long,
-        viewModelInstanceHandle: Long,
-        propertyPath: String
-    )
-
-    private external fun cppSetBooleanProperty(
-        pointer: Long,
-        viewModelInstanceHandle: Long,
-        propertyPath: String,
-        value: Boolean
-    )
-
-    private external fun cppGetBooleanProperty(
-        pointer: Long,
-        requestID: Long,
-        viewModelInstanceHandle: Long,
-        propertyPath: String
-    )
-
-    private external fun cppSetEnumProperty(
-        pointer: Long,
-        viewModelInstanceHandle: Long,
-        propertyPath: String,
-        value: String
-    )
-
-    private external fun cppGetEnumProperty(
-        pointer: Long,
-        requestID: Long,
-        viewModelInstanceHandle: Long,
-        propertyPath: String
-    )
-
-    private external fun cppSetColorProperty(
-        pointer: Long,
-        viewModelInstanceHandle: Long,
-        propertyPath: String,
-        value: Int
-    )
-
-    private external fun cppGetColorProperty(
-        pointer: Long,
-        requestID: Long,
-        viewModelInstanceHandle: Long,
-        propertyPath: String
-    )
-
-    private external fun cppFireTriggerProperty(
-        pointer: Long,
-        viewModelInstanceHandle: Long,
-        propertyPath: String
-    )
-
-    private external fun cppSubscribeToProperty(
-        pointer: Long,
-        viewModelInstanceHandle: Long,
-        propertyPath: String,
-        propertyType: Int
-    )
-
-    private external fun cppDecodeImage(pointer: Long, requestID: Long, bytes: ByteArray)
-    private external fun cppDeleteImage(pointer: Long, imageHandle: Long)
-    private external fun cppRegisterImage(
-        pointer: Long,
-        name: String,
-        imageHandle: Long
-    )
-
-    private external fun cppUnregisterImage(pointer: Long, name: String)
-    private external fun cppDecodeAudio(pointer: Long, requestID: Long, bytes: ByteArray)
-    private external fun cppDeleteAudio(pointer: Long, audioHandle: Long)
-    private external fun cppRegisterAudio(
-        pointer: Long,
-        name: String,
-        audioHandle: Long
-    )
-
-    private external fun cppUnregisterAudio(pointer: Long, name: String)
-    private external fun cppDecodeFont(pointer: Long, requestID: Long, bytes: ByteArray)
-    private external fun cppDeleteFont(pointer: Long, fontHandle: Long)
-    private external fun cppRegisterFont(
-        pointer: Long,
-        name: String,
-        fontHandle: Long
-    )
-
-    private external fun cppUnregisterFont(pointer: Long, name: String)
-    private external fun cppPointerMove(
-        pointer: Long,
-        stateMachineHandle: Long,
-        fit: Fit,
-        alignment: Alignment,
-        layoutScale: Float,
-        surfaceWidth: Float,
-        surfaceHeight: Float,
-        pointerID: Int,
-        x: Float,
-        y: Float
-    )
-
-    private external fun cppPointerDown(
-        pointer: Long,
-        stateMachineHandle: Long,
-        fit: Fit,
-        alignment: Alignment,
-        layoutScale: Float,
-        surfaceWidth: Float,
-        surfaceHeight: Float,
-        pointerID: Int,
-        x: Float,
-        y: Float
-    )
-
-    private external fun cppPointerUp(
-        pointer: Long,
-        stateMachineHandle: Long,
-        fit: Fit,
-        alignment: Alignment,
-        layoutScale: Float,
-        surfaceWidth: Float,
-        surfaceHeight: Float,
-        pointerID: Int,
-        x: Float,
-        y: Float
-    )
-
-    private external fun cppPointerExit(
-        pointer: Long,
-        stateMachineHandle: Long,
-        fit: Fit,
-        alignment: Alignment,
-        layoutScale: Float,
-        surfaceWidth: Float,
-        surfaceHeight: Float,
-        pointerID: Int,
-        x: Float,
-        y: Float
-    )
-
-    private external fun cppResizeArtboard(
-        pointer: Long,
-        artboardHandle: Long,
-        width: Int,
-        height: Int,
-        scaleFactor: Float
-    )
-
-    private external fun cppResetArtboardSize(
-        pointer: Long,
-        artboardHandle: Long
-    )
-
-    private external fun cppCreateRiveRenderTarget(pointer: Long, width: Int, height: Int): Long
-    private external fun cppCreateDrawKey(pointer: Long): Long
-    private external fun cppDraw(
-        pointer: Long,
-        renderContextPointer: Long,
-        surfaceNativePointer: Long,
-        drawKey: Long,
-        artboardHandle: Long,
-        stateMachineHandle: Long,
-        renderTargetPointer: Long,
-        width: Int,
-        height: Int,
-        fit: Fit,
-        alignment: Alignment,
-        scaleFactor: Float,
-        clearColor: Int
-    )
-
-    private external fun cppDrawToBuffer(
-        pointer: Long,
-        renderContextPointer: Long,
-        surfaceNativePointer: Long,
-        drawKey: Long,
-        artboardHandle: Long,
-        stateMachineHandle: Long,
-        renderTargetPointer: Long,
-        width: Int,
-        height: Int,
-        fit: Fit,
-        alignment: Alignment,
-        scaleFactor: Float,
-        clearColor: Int,
-        buffer: ByteArray
-    )
-
-    private external fun cppRunOnCommandServer(pointer: Long, work: () -> Unit)
-
     companion object {
         /**
-         * Maximum number of RiveUI components that can safely use this CommandQueue instance
+         * Maximum number of Rive components that can safely use this CommandQueue instance
          * concurrently.
          */
         const val MAX_CONCURRENT_SUBSCRIBERS = 32
@@ -498,7 +160,7 @@ class CommandQueue(
      *
      * val cq = CommandQueue().also { it.withLifecycle(this, "MyActivity") }
      *
-     * ⚠️ Do not use this with a command queue created with [rememberCommandQueue]. A command queue
+     * ⚠️ Do not use this with a command queue created with [rememberRiveWorker]. A command queue
      * created with that method has its lifecycle managed by the Composable's lifecycle.
      *
      * @param owner The LifecycleOwner to tie this CommandQueue's lifetime to, such as an Activity
@@ -664,7 +326,7 @@ class CommandQueue(
      * @see [beginPolling]
      */
     @Throws(IllegalStateException::class)
-    fun pollMessages() = cppPollMessages(cppPointer.pointer)
+    fun pollMessages() = bridge.cppPollMessages(cppPointer.pointer)
 
     /**
      * Create a Rive rendering surface for Rive to draw into.
@@ -713,10 +375,10 @@ class CommandQueue(
     @Throws(IllegalStateException::class)
     fun createRiveRenderTarget(width: Int, height: Int): Long {
         RiveLog.d(TAG) { "Creating Rive render target on command server thread" }
-        return cppCreateRiveRenderTarget(cppPointer.pointer, width, height)
+        return bridge.cppCreateRiveRenderTarget(cppPointer.pointer, width, height)
     }
 
-    private fun nextDrawKey() = DrawKey(cppCreateDrawKey(cppPointer.pointer))
+    private fun nextDrawKey() = DrawKey(bridge.cppCreateDrawKey(cppPointer.pointer))
 
     /**
      * Callback when there is any error on a file operation. The continuation will be resumed with
@@ -844,7 +506,7 @@ class CommandQueue(
     @Throws(RuntimeException::class, IllegalStateException::class, CancellationException::class)
     suspend fun getArtboardNames(fileHandle: FileHandle): List<String> =
         suspendNativeRequest { requestID ->
-            cppGetArtboardNames(
+            bridge.cppGetArtboardNames(
                 cppPointer.pointer,
                 requestID,
                 fileHandle.handle
@@ -877,7 +539,7 @@ class CommandQueue(
     @Throws(RuntimeException::class, IllegalStateException::class, CancellationException::class)
     suspend fun getStateMachineNames(artboardHandle: ArtboardHandle): List<String> =
         suspendNativeRequest { requestID ->
-            cppGetStateMachineNames(
+            bridge.cppGetStateMachineNames(
                 cppPointer.pointer,
                 requestID,
                 artboardHandle.handle
@@ -910,7 +572,7 @@ class CommandQueue(
     @Throws(RuntimeException::class, IllegalStateException::class, CancellationException::class)
     suspend fun getViewModelNames(fileHandle: FileHandle): List<String> =
         suspendNativeRequest { requestID ->
-            cppGetViewModelNames(
+            bridge.cppGetViewModelNames(
                 cppPointer.pointer,
                 requestID,
                 fileHandle.handle
@@ -948,7 +610,7 @@ class CommandQueue(
         fileHandle: FileHandle,
         viewModelName: String
     ): List<String> = suspendNativeRequest { requestID ->
-        cppGetViewModelInstanceNames(
+        bridge.cppGetViewModelInstanceNames(
             cppPointer.pointer,
             requestID,
             fileHandle.handle,
@@ -987,7 +649,7 @@ class CommandQueue(
         fileHandle: FileHandle,
         viewModelName: String
     ): List<ViewModel.Property> = suspendNativeRequest { requestID ->
-        cppGetViewModelProperties(
+        bridge.cppGetViewModelProperties(
             cppPointer.pointer,
             requestID,
             fileHandle.handle,
@@ -1025,7 +687,7 @@ class CommandQueue(
      */
     @Throws(RuntimeException::class, IllegalStateException::class, CancellationException::class)
     suspend fun getEnums(fileHandle: FileHandle): List<Enum> = suspendNativeRequest { requestID ->
-        cppGetEnums(
+        bridge.cppGetEnums(
             cppPointer.pointer,
             requestID,
             fileHandle.handle
@@ -1055,14 +717,13 @@ class CommandQueue(
      * @throws IllegalStateException If the CommandQueue has been released.
      */
     @Throws(IllegalStateException::class)
-    fun createDefaultArtboard(fileHandle: FileHandle): ArtboardHandle =
-        ArtboardHandle(
-            cppCreateDefaultArtboard(
-                cppPointer.pointer,
-                nextRequestID.getAndIncrement(),
-                fileHandle.handle
-            )
+    fun createDefaultArtboard(fileHandle: FileHandle): ArtboardHandle = ArtboardHandle(
+        bridge.cppCreateDefaultArtboard(
+            cppPointer.pointer,
+            nextRequestID.getAndIncrement(),
+            fileHandle.handle
         )
+    )
 
     /**
      * Create an artboard by name for the given file. This is useful when the file has multiple
@@ -1075,7 +736,7 @@ class CommandQueue(
     @Throws(IllegalStateException::class)
     fun createArtboardByName(fileHandle: FileHandle, name: String): ArtboardHandle =
         ArtboardHandle(
-            cppCreateArtboardByName(
+            bridge.cppCreateArtboardByName(
                 cppPointer.pointer,
                 nextRequestID.getAndIncrement(),
                 fileHandle.handle,
@@ -1092,12 +753,9 @@ class CommandQueue(
      * @throws IllegalStateException If the CommandQueue has been released.
      */
     @Throws(IllegalStateException::class)
-    fun deleteArtboard(artboardHandle: ArtboardHandle) =
-        cppDeleteArtboard(
-            cppPointer.pointer,
-            nextRequestID.getAndIncrement(),
-            artboardHandle.handle
-        )
+    fun deleteArtboard(artboardHandle: ArtboardHandle) = bridge.cppDeleteArtboard(
+        cppPointer.pointer, nextRequestID.getAndIncrement(), artboardHandle.handle
+    )
 
     /**
      * Create the default state machine for the given artboard. This is the state machine marked
@@ -1118,7 +776,7 @@ class CommandQueue(
     @Throws(IllegalStateException::class)
     fun createDefaultStateMachine(artboardHandle: ArtboardHandle): StateMachineHandle =
         StateMachineHandle(
-            cppCreateDefaultStateMachine(
+            bridge.cppCreateDefaultStateMachine(
                 cppPointer.pointer,
                 nextRequestID.getAndIncrement(),
                 artboardHandle.handle
@@ -1144,7 +802,7 @@ class CommandQueue(
     @Throws(IllegalStateException::class)
     fun createStateMachineByName(artboardHandle: ArtboardHandle, name: String): StateMachineHandle =
         StateMachineHandle(
-            cppCreateStateMachineByName(
+            bridge.cppCreateStateMachineByName(
                 cppPointer.pointer,
                 nextRequestID.getAndIncrement(),
                 artboardHandle.handle,
@@ -1161,12 +819,11 @@ class CommandQueue(
      * @throws IllegalStateException If the CommandQueue has been released.
      */
     @Throws(IllegalStateException::class)
-    fun deleteStateMachine(stateMachineHandle: StateMachineHandle) =
-        cppDeleteStateMachine(
-            cppPointer.pointer,
-            nextRequestID.getAndIncrement(),
-            stateMachineHandle.handle
-        )
+    fun deleteStateMachine(stateMachineHandle: StateMachineHandle) = bridge.cppDeleteStateMachine(
+        cppPointer.pointer,
+        nextRequestID.getAndIncrement(),
+        stateMachineHandle.handle
+    )
 
     /**
      * Advance the state machine by the given delta time in nanoseconds.
@@ -1177,14 +834,12 @@ class CommandQueue(
      * @throws IllegalStateException If the CommandQueue has been released.
      */
     @Throws(RuntimeException::class, IllegalStateException::class)
-    fun advanceStateMachine(
-        stateMachineHandle: StateMachineHandle,
-        deltaTime: Duration
-    ) = cppAdvanceStateMachine(
-        cppPointer.pointer,
-        stateMachineHandle.handle,
-        deltaTime.inWholeNanoseconds
-    )
+    fun advanceStateMachine(stateMachineHandle: StateMachineHandle, deltaTime: Duration) =
+        bridge.cppAdvanceStateMachine(
+            cppPointer.pointer,
+            stateMachineHandle.handle,
+            deltaTime.inWholeNanoseconds
+        )
 
     /**
      * Callback when the state machine settles. This is called when the state machine has determined
@@ -1226,7 +881,7 @@ class CommandQueue(
             is ViewModelInstanceSource.Blank -> when (val vm = source.vmSource) {
                 is ViewModelSource.Named ->
                     ViewModelInstanceHandle(
-                        cppNamedVMCreateBlankVMI(
+                        bridge.cppNamedVMCreateBlankVMI(
                             cppPointer.pointer,
                             nextRequestID.getAndIncrement(),
                             fileHandle.handle,
@@ -1236,7 +891,7 @@ class CommandQueue(
 
                 is ViewModelSource.DefaultForArtboard ->
                     ViewModelInstanceHandle(
-                        cppDefaultVMCreateBlankVMI(
+                        bridge.cppDefaultVMCreateBlankVMI(
                             cppPointer.pointer,
                             nextRequestID.getAndIncrement(),
                             fileHandle.handle,
@@ -1248,7 +903,7 @@ class CommandQueue(
             is ViewModelInstanceSource.Default -> when (val vm = source.vmSource) {
                 is ViewModelSource.Named ->
                     ViewModelInstanceHandle(
-                        cppNamedVMCreateDefaultVMI(
+                        bridge.cppNamedVMCreateDefaultVMI(
                             cppPointer.pointer,
                             nextRequestID.getAndIncrement(),
                             fileHandle.handle,
@@ -1258,7 +913,7 @@ class CommandQueue(
 
                 is ViewModelSource.DefaultForArtboard ->
                     ViewModelInstanceHandle(
-                        cppDefaultVMCreateDefaultVMI(
+                        bridge.cppDefaultVMCreateDefaultVMI(
                             cppPointer.pointer,
                             nextRequestID.getAndIncrement(),
                             fileHandle.handle,
@@ -1270,7 +925,7 @@ class CommandQueue(
             is ViewModelInstanceSource.Named -> when (val vm = source.vmSource) {
                 is ViewModelSource.Named ->
                     ViewModelInstanceHandle(
-                        cppNamedVMCreateNamedVMI(
+                        bridge.cppNamedVMCreateNamedVMI(
                             cppPointer.pointer,
                             nextRequestID.getAndIncrement(),
                             fileHandle.handle,
@@ -1281,7 +936,7 @@ class CommandQueue(
 
                 is ViewModelSource.DefaultForArtboard ->
                     ViewModelInstanceHandle(
-                        cppDefaultVMCreateNamedVMI(
+                        bridge.cppDefaultVMCreateNamedVMI(
                             cppPointer.pointer,
                             nextRequestID.getAndIncrement(),
                             fileHandle.handle,
@@ -1292,11 +947,21 @@ class CommandQueue(
             }
 
             is ViewModelInstanceSource.Reference -> ViewModelInstanceHandle(
-                cppReferenceNestedVMI(
+                bridge.cppReferenceNestedVMI(
                     cppPointer.pointer,
                     nextRequestID.getAndIncrement(),
-                    source.instance.instanceHandle.handle,
+                    source.parentInstance.instanceHandle.handle,
                     source.path
+                )
+            )
+
+            is ViewModelInstanceSource.ReferenceListItem -> ViewModelInstanceHandle(
+                bridge.cppReferenceListItemVMI(
+                    cppPointer.pointer,
+                    nextRequestID.getAndIncrement(),
+                    source.parentInstance.instanceHandle.handle,
+                    source.pathToList,
+                    source.index
                 )
             )
         }
@@ -1309,13 +974,12 @@ class CommandQueue(
      * @throws IllegalStateException If the CommandQueue has been released.
      */
     @Throws(IllegalStateException::class)
-    fun deleteViewModelInstance(
-        viewModelInstanceHandle: ViewModelInstanceHandle
-    ) = cppDeleteViewModelInstance(
-        cppPointer.pointer,
-        nextRequestID.getAndIncrement(),
-        viewModelInstanceHandle.handle
-    )
+    fun deleteViewModelInstance(viewModelInstanceHandle: ViewModelInstanceHandle) =
+        bridge.cppDeleteViewModelInstance(
+            cppPointer.pointer,
+            nextRequestID.getAndIncrement(),
+            viewModelInstanceHandle.handle
+        )
 
     /**
      * Bind a view model instance to a state machine. This establishes the data binding for the
@@ -1331,7 +995,7 @@ class CommandQueue(
     fun bindViewModelInstance(
         stateMachineHandle: StateMachineHandle,
         viewModelInstanceHandle: ViewModelInstanceHandle
-    ) = cppBindViewModelInstance(
+    ) = bridge.cppBindViewModelInstance(
         cppPointer.pointer,
         nextRequestID.getAndIncrement(),
         stateMachineHandle.handle,
@@ -1373,7 +1037,7 @@ class CommandQueue(
         viewModelInstanceHandle: ViewModelInstanceHandle,
         propertyPath: String,
         value: Float
-    ) = cppSetNumberProperty(
+    ) = bridge.cppSetNumberProperty(
         cppPointer.pointer,
         viewModelInstanceHandle.handle,
         propertyPath,
@@ -1397,7 +1061,7 @@ class CommandQueue(
         viewModelInstanceHandle: ViewModelInstanceHandle,
         propertyPath: String
     ): Float = suspendNativeRequest { requestID ->
-        cppGetNumberProperty(
+        bridge.cppGetNumberProperty(
             cppPointer.pointer,
             requestID,
             viewModelInstanceHandle.handle,
@@ -1446,7 +1110,7 @@ class CommandQueue(
         viewModelInstanceHandle: ViewModelInstanceHandle,
         propertyPath: String,
         value: String
-    ) = cppSetStringProperty(
+    ) = bridge.cppSetStringProperty(
         cppPointer.pointer,
         viewModelInstanceHandle.handle,
         propertyPath,
@@ -1470,7 +1134,7 @@ class CommandQueue(
         viewModelInstanceHandle: ViewModelInstanceHandle,
         propertyPath: String
     ): String = suspendNativeRequest { requestID ->
-        cppGetStringProperty(
+        bridge.cppGetStringProperty(
             cppPointer.pointer,
             requestID,
             viewModelInstanceHandle.handle,
@@ -1519,7 +1183,7 @@ class CommandQueue(
         viewModelInstanceHandle: ViewModelInstanceHandle,
         propertyPath: String,
         value: Boolean
-    ) = cppSetBooleanProperty(
+    ) = bridge.cppSetBooleanProperty(
         cppPointer.pointer,
         viewModelInstanceHandle.handle,
         propertyPath,
@@ -1543,7 +1207,7 @@ class CommandQueue(
         viewModelInstanceHandle: ViewModelInstanceHandle,
         propertyPath: String
     ): Boolean = suspendNativeRequest { requestID ->
-        cppGetBooleanProperty(
+        bridge.cppGetBooleanProperty(
             cppPointer.pointer,
             requestID,
             viewModelInstanceHandle.handle,
@@ -1592,7 +1256,7 @@ class CommandQueue(
         viewModelInstanceHandle: ViewModelInstanceHandle,
         propertyPath: String,
         value: String
-    ) = cppSetEnumProperty(
+    ) = bridge.cppSetEnumProperty(
         cppPointer.pointer,
         viewModelInstanceHandle.handle,
         propertyPath,
@@ -1616,7 +1280,7 @@ class CommandQueue(
         viewModelInstanceHandle: ViewModelInstanceHandle,
         propertyPath: String
     ): String = suspendNativeRequest { requestID ->
-        cppGetEnumProperty(
+        bridge.cppGetEnumProperty(
             cppPointer.pointer,
             requestID,
             viewModelInstanceHandle.handle,
@@ -1665,7 +1329,7 @@ class CommandQueue(
         viewModelInstanceHandle: ViewModelInstanceHandle,
         propertyPath: String,
         @ColorInt value: Int
-    ) = cppSetColorProperty(
+    ) = bridge.cppSetColorProperty(
         cppPointer.pointer,
         viewModelInstanceHandle.handle,
         propertyPath,
@@ -1689,7 +1353,7 @@ class CommandQueue(
         viewModelInstanceHandle: ViewModelInstanceHandle,
         propertyPath: String
     ): Int = suspendNativeRequest { requestID ->
-        cppGetColorProperty(
+        bridge.cppGetColorProperty(
             cppPointer.pointer,
             requestID,
             viewModelInstanceHandle.handle,
@@ -1736,7 +1400,7 @@ class CommandQueue(
     fun fireTriggerProperty(
         viewModelInstanceHandle: ViewModelInstanceHandle,
         propertyPath: String
-    ) = cppFireTriggerProperty(
+    ) = bridge.cppFireTriggerProperty(
         cppPointer.pointer,
         viewModelInstanceHandle.handle,
         propertyPath
@@ -1782,11 +1446,203 @@ class CommandQueue(
         viewModelInstanceHandle: ViewModelInstanceHandle,
         propertyPath: String,
         propertyType: ViewModel.PropertyDataType
-    ) = cppSubscribeToProperty(
+    ) = bridge.cppSubscribeToProperty(
         cppPointer.pointer,
         viewModelInstanceHandle.handle,
         propertyPath,
         propertyType.value
+    )
+
+    /**
+     * Assign an image to an image property on the view model instance.
+     *
+     * @param viewModelInstanceHandle The handle of the view model instance that the property
+     *    belongs to.
+     * @param propertyPath The path to the property that should be assigned to. Slash delimited.
+     * @param imageHandle The handle of the image to assign.
+     * @throws IllegalStateException If the CommandQueue has been released.
+     */
+    @Throws(IllegalStateException::class)
+    fun setImageProperty(
+        viewModelInstanceHandle: ViewModelInstanceHandle,
+        propertyPath: String,
+        imageHandle: ImageHandle
+    ) = bridge.cppSetImageProperty(
+        cppPointer.pointer,
+        viewModelInstanceHandle.handle,
+        propertyPath,
+        imageHandle.handle
+    )
+
+    /**
+     * Assign an artboard to a bindable artboard property on the view model instance.
+     *
+     * @param viewModelInstanceHandle The handle of the view model instance that the property
+     *    belongs to.
+     * @param propertyPath The path to the property that should be assigned to. Slash delimited.
+     * @param artboardHandle The handle of the artboard to assign.
+     * @throws IllegalStateException If the CommandQueue has been released.
+     */
+    @Throws(IllegalStateException::class)
+    fun setArtboardProperty(
+        viewModelInstanceHandle: ViewModelInstanceHandle,
+        propertyPath: String,
+        artboardHandle: ArtboardHandle
+    ) = bridge.cppSetArtboardProperty(
+        cppPointer.pointer,
+        viewModelInstanceHandle.handle,
+        propertyPath,
+        artboardHandle.handle
+    )
+
+    /**
+     * Gets the size of a list property on the view model instance.
+     *
+     * @param viewModelInstanceHandle The handle of the view model instance that the property
+     *    belongs to.
+     * @param propertyPath The path to the property that should be retrieved. Slash delimited.
+     * @return The size of the list.
+     * @throws RuntimeException If the view model instance handle is invalid, or the named property
+     *    does not exist or is of the wrong type.
+     * @throws IllegalStateException If the CommandQueue has been released.
+     * @throws CancellationException If the coroutine is cancelled before the operation completes.
+     */
+    @Throws(RuntimeException::class, IllegalStateException::class, CancellationException::class)
+    suspend fun getListSize(
+        viewModelInstanceHandle: ViewModelInstanceHandle,
+        propertyPath: String
+    ): Int = suspendNativeRequest { requestID ->
+        bridge.cppGetListSize(
+            cppPointer.pointer,
+            requestID,
+            viewModelInstanceHandle.handle,
+            propertyPath
+        )
+    }
+
+    /**
+     * Callback when the list size is retrieved, from [getListSize].
+     *
+     * @param requestID The request ID used when querying the list size, used to complete the
+     *    continuation.
+     * @param size The size of the list.
+     */
+    @Keep // Called from JNI
+    @Suppress("Unused")
+    @JvmName("onViewModelListSizeReceived")
+    internal fun onViewModelListSizeReceived(requestID: Long, size: Int) {
+        (pendingContinuations.remove(requestID) as? Continuation<Int>)?.resume(size)
+    }
+
+    /**
+     * Inserts a view model instance into a list property at the specified index.
+     *
+     * @param viewModelInstanceHandle The handle of the view model instance that owns the list
+     *    property.
+     * @param propertyPath The path to the list property. Slash delimited.
+     * @param index The index at which to insert the item.
+     * @param itemHandle The handle of the view model instance to insert into the list.
+     * @throws IllegalStateException If the CommandQueue has been released.
+     */
+    @Throws(IllegalStateException::class)
+    fun insertToListAtIndex(
+        viewModelInstanceHandle: ViewModelInstanceHandle,
+        propertyPath: String,
+        index: Int,
+        itemHandle: ViewModelInstanceHandle
+    ) = bridge.cppInsertToListAtIndex(
+        cppPointer.pointer,
+        viewModelInstanceHandle.handle,
+        propertyPath,
+        index,
+        itemHandle.handle
+    )
+
+    /**
+     * Appends a view model instance to the end of a list property.
+     *
+     * @param viewModelInstanceHandle The handle of the view model instance that owns the list
+     *    property.
+     * @param propertyPath The path to the list property. Slash delimited.
+     * @param itemHandle The handle of the view model instance to append to the list.
+     * @throws IllegalStateException If the CommandQueue has been released.
+     */
+    @Throws(IllegalStateException::class)
+    fun appendToList(
+        viewModelInstanceHandle: ViewModelInstanceHandle,
+        propertyPath: String,
+        itemHandle: ViewModelInstanceHandle
+    ) = bridge.cppAppendToList(
+        cppPointer.pointer,
+        viewModelInstanceHandle.handle,
+        propertyPath,
+        itemHandle.handle
+    )
+
+    /**
+     * Removes an item from a list property at the specified index.
+     *
+     * @param viewModelInstanceHandle The handle of the view model instance that owns the list
+     *    property.
+     * @param propertyPath The path to the list property. Slash delimited.
+     * @param index The index of the item to remove.
+     * @throws IllegalStateException If the CommandQueue has been released.
+     */
+    @Throws(IllegalStateException::class)
+    fun removeFromListAtIndex(
+        viewModelInstanceHandle: ViewModelInstanceHandle,
+        propertyPath: String,
+        index: Int
+    ) = bridge.cppRemoveFromListAtIndex(
+        cppPointer.pointer,
+        viewModelInstanceHandle.handle,
+        propertyPath,
+        index
+    )
+
+    /**
+     * Removes a view model instance from a list property.
+     *
+     * @param viewModelInstanceHandle The handle of the view model instance that owns the list
+     *    property.
+     * @param propertyPath The path to the list property. Slash delimited.
+     * @param itemHandle The handle of the view model instance to remove from the list.
+     * @throws IllegalStateException If the CommandQueue has been released.
+     */
+    @Throws(IllegalStateException::class)
+    fun removeFromList(
+        viewModelInstanceHandle: ViewModelInstanceHandle,
+        propertyPath: String,
+        itemHandle: ViewModelInstanceHandle
+    ) = bridge.cppRemoveFromList(
+        cppPointer.pointer,
+        viewModelInstanceHandle.handle,
+        propertyPath,
+        itemHandle.handle
+    )
+
+    /**
+     * Swaps two items in a list property by their indices.
+     *
+     * @param viewModelInstanceHandle The handle of the view model instance that owns the list
+     *    property.
+     * @param propertyPath The path to the list property. Slash delimited.
+     * @param indexA The index of the first item to swap.
+     * @param indexB The index of the second item to swap.
+     * @throws IllegalStateException If the CommandQueue has been released.
+     */
+    @Throws(IllegalStateException::class)
+    fun swapListItems(
+        viewModelInstanceHandle: ViewModelInstanceHandle,
+        propertyPath: String,
+        indexA: Int,
+        indexB: Int
+    ) = bridge.cppSwapListItems(
+        cppPointer.pointer,
+        viewModelInstanceHandle.handle,
+        propertyPath,
+        indexA,
+        indexB
     )
 
     /**
@@ -1805,7 +1661,7 @@ class CommandQueue(
      */
     @Throws(RuntimeException::class, IllegalStateException::class, CancellationException::class)
     suspend fun decodeImage(bytes: ByteArray): ImageHandle = suspendNativeRequest { requestID ->
-        cppDecodeImage(cppPointer.pointer, requestID, bytes)
+        bridge.cppDecodeImage(cppPointer.pointer, requestID, bytes)
     }
 
     /**
@@ -1848,7 +1704,7 @@ class CommandQueue(
      */
     @Throws(IllegalStateException::class)
     fun deleteImage(imageHandle: ImageHandle) =
-        cppDeleteImage(cppPointer.pointer, imageHandle.handle)
+        bridge.cppDeleteImage(cppPointer.pointer, imageHandle.handle)
 
     /**
      * Register an image as an asset with the given name. This allows the image to be used to
@@ -1870,7 +1726,7 @@ class CommandQueue(
      */
     @Throws(IllegalStateException::class)
     fun registerImage(name: String, imageHandle: ImageHandle) =
-        cppRegisterImage(cppPointer.pointer, name, imageHandle.handle)
+        bridge.cppRegisterImage(cppPointer.pointer, name, imageHandle.handle)
 
     /**
      * Unregister an image that was previously registered with [registerImage]. This will remove the
@@ -1882,7 +1738,7 @@ class CommandQueue(
      */
     @Throws(IllegalStateException::class)
     fun unregisterImage(name: String) =
-        cppUnregisterImage(cppPointer.pointer, name)
+        bridge.cppUnregisterImage(cppPointer.pointer, name)
 
     /**
      * Decode an audio file from the given bytes. The decoded audio is stored on the CommandServer.
@@ -1898,7 +1754,7 @@ class CommandQueue(
      */
     @Throws(RuntimeException::class, IllegalStateException::class, CancellationException::class)
     suspend fun decodeAudio(bytes: ByteArray): AudioHandle = suspendNativeRequest { requestID ->
-        cppDecodeAudio(cppPointer.pointer, requestID, bytes)
+        bridge.cppDecodeAudio(cppPointer.pointer, requestID, bytes)
     }
 
     /**
@@ -1941,7 +1797,7 @@ class CommandQueue(
      */
     @Throws(IllegalStateException::class)
     fun deleteAudio(audioHandle: AudioHandle) =
-        cppDeleteAudio(cppPointer.pointer, audioHandle.handle)
+        bridge.cppDeleteAudio(cppPointer.pointer, audioHandle.handle)
 
     /**
      * Register audio as an asset with the given name. This allows the audio to be used to fulfill a
@@ -1963,7 +1819,7 @@ class CommandQueue(
      */
     @Throws(IllegalStateException::class)
     fun registerAudio(name: String, audioHandle: AudioHandle) =
-        cppRegisterAudio(cppPointer.pointer, name, audioHandle.handle)
+        bridge.cppRegisterAudio(cppPointer.pointer, name, audioHandle.handle)
 
     /**
      * Unregister audio that was previously registered with [registerAudio]. This will remove the
@@ -1975,7 +1831,7 @@ class CommandQueue(
      */
     @Throws(IllegalStateException::class)
     fun unregisterAudio(name: String) =
-        cppUnregisterAudio(cppPointer.pointer, name)
+        bridge.cppUnregisterAudio(cppPointer.pointer, name)
 
     /**
      * Decode a font file from the given bytes. The bytes are for a font file, such as TTF. The
@@ -1992,7 +1848,7 @@ class CommandQueue(
      */
     @Throws(RuntimeException::class, IllegalStateException::class, CancellationException::class)
     suspend fun decodeFont(bytes: ByteArray): FontHandle = suspendNativeRequest { requestID ->
-        cppDecodeFont(cppPointer.pointer, requestID, bytes)
+        bridge.cppDecodeFont(cppPointer.pointer, requestID, bytes)
     }
 
     /**
@@ -2035,7 +1891,7 @@ class CommandQueue(
      */
     @Throws(IllegalStateException::class)
     fun deleteFont(fontHandle: FontHandle) =
-        cppDeleteFont(cppPointer.pointer, fontHandle.handle)
+        bridge.cppDeleteFont(cppPointer.pointer, fontHandle.handle)
 
     /**
      * Register a font as an asset with the given name. This allows the font to be used to fulfill a
@@ -2057,7 +1913,7 @@ class CommandQueue(
      */
     @Throws(IllegalStateException::class)
     fun registerFont(name: String, fontHandle: FontHandle) =
-        cppRegisterFont(cppPointer.pointer, name, fontHandle.handle)
+        bridge.cppRegisterFont(cppPointer.pointer, name, fontHandle.handle)
 
     /**
      * Unregister a font that was previously registered with [registerFont]. This will remove the
@@ -2069,7 +1925,7 @@ class CommandQueue(
      */
     @Throws(IllegalStateException::class)
     fun unregisterFont(name: String) =
-        cppUnregisterFont(cppPointer.pointer, name)
+        bridge.cppUnregisterFont(cppPointer.pointer, name)
 
     /**
      * Notify the state machine that the pointer (typically a user's touch) has moved. This is used
@@ -2080,7 +1936,6 @@ class CommandQueue(
      *
      * @param stateMachineHandle The handle of the state machine to notify.
      * @param fit The fit mode of the artboard.
-     * @param alignment The alignment of the artboard.
      * @param surfaceWidth The width of the surface the artboard is drawn to.
      * @param surfaceHeight The height of the surface the artboard is drawn to.
      * @param pointerX The X coordinate of the pointer in surface space.
@@ -2091,19 +1946,17 @@ class CommandQueue(
     fun pointerMove(
         stateMachineHandle: StateMachineHandle,
         fit: Fit,
-        alignment: Alignment,
-        layoutScale: Float,
         surfaceWidth: Float,
         surfaceHeight: Float,
         pointerID: Int,
         pointerX: Float,
         pointerY: Float
-    ) = cppPointerMove(
+    ) = bridge.cppPointerMove(
         cppPointer.pointer,
         stateMachineHandle.handle,
-        fit,
-        alignment,
-        layoutScale,
+        fit.nativeMapping,
+        fit.alignment.nativeMapping,
+        fit.scaleFactor,
         surfaceWidth,
         surfaceHeight,
         pointerID,
@@ -2120,9 +1973,6 @@ class CommandQueue(
      *
      * @param stateMachineHandle The handle of the state machine to notify.
      * @param fit The fit mode of the artboard.
-     * @param alignment The alignment of the artboard.
-     * @param layoutScale The scale factor applied to the artboard when the fit type is Layout
-     *    (otherwise 1f).
      * @param surfaceWidth The width of the surface the artboard is drawn to.
      * @param surfaceHeight The height of the surface the artboard is drawn to.
      * @param pointerX The X coordinate of the pointer in surface space.
@@ -2133,19 +1983,17 @@ class CommandQueue(
     fun pointerDown(
         stateMachineHandle: StateMachineHandle,
         fit: Fit,
-        alignment: Alignment,
-        layoutScale: Float,
         surfaceWidth: Float,
         surfaceHeight: Float,
         pointerID: Int,
         pointerX: Float,
         pointerY: Float
-    ) = cppPointerDown(
+    ) = bridge.cppPointerDown(
         cppPointer.pointer,
         stateMachineHandle.handle,
-        fit,
-        alignment,
-        layoutScale,
+        fit.nativeMapping,
+        fit.alignment.nativeMapping,
+        fit.scaleFactor,
         surfaceWidth,
         surfaceHeight,
         pointerID,
@@ -2162,9 +2010,6 @@ class CommandQueue(
      *
      * @param stateMachineHandle The handle of the state machine to notify.
      * @param fit The fit mode of the artboard.
-     * @param alignment The alignment of the artboard.
-     * @param layoutScale The scale factor applied to the artboard when the fit type is Layout
-     *    (otherwise 1f).
      * @param surfaceWidth The width of the surface the artboard is drawn to.
      * @param surfaceHeight The height of the surface the artboard is drawn to.
      * @param pointerX The X coordinate of the pointer in surface space.
@@ -2175,19 +2020,17 @@ class CommandQueue(
     fun pointerUp(
         stateMachineHandle: StateMachineHandle,
         fit: Fit,
-        alignment: Alignment,
-        layoutScale: Float,
         surfaceWidth: Float,
         surfaceHeight: Float,
         pointerID: Int,
         pointerX: Float,
         pointerY: Float
-    ) = cppPointerUp(
+    ) = bridge.cppPointerUp(
         cppPointer.pointer,
         stateMachineHandle.handle,
-        fit,
-        alignment,
-        layoutScale,
+        fit.nativeMapping,
+        fit.alignment.nativeMapping,
+        fit.scaleFactor,
         surfaceWidth,
         surfaceHeight,
         pointerID,
@@ -2204,9 +2047,6 @@ class CommandQueue(
      *
      * @param stateMachineHandle The handle of the state machine to notify.
      * @param fit The fit mode of the artboard.
-     * @param alignment The alignment of the artboard.
-     * @param layoutScale The scale factor applied to the artboard when the fit type is Layout
-     *    (otherwise 1f).
      * @param surfaceWidth The width of the surface the artboard is drawn to.
      * @param surfaceHeight The height of the surface the artboard is drawn to.
      * @param pointerX The X coordinate of the pointer in surface space.
@@ -2217,19 +2057,17 @@ class CommandQueue(
     fun pointerExit(
         stateMachineHandle: StateMachineHandle,
         fit: Fit,
-        alignment: Alignment,
-        layoutScale: Float,
         surfaceWidth: Float,
         surfaceHeight: Float,
         pointerID: Int,
         pointerX: Float,
         pointerY: Float
-    ) = cppPointerExit(
+    ) = bridge.cppPointerExit(
         cppPointer.pointer,
         stateMachineHandle.handle,
-        fit,
-        alignment,
-        layoutScale,
+        fit.nativeMapping,
+        fit.alignment.nativeMapping,
+        fit.scaleFactor,
         surfaceWidth,
         surfaceHeight,
         pointerID,
@@ -2240,7 +2078,7 @@ class CommandQueue(
     /**
      * Resizes an artboard to match the dimensions of the given surface.
      *
-     * ℹ️ This is required when setting the fit type to [Fit.LAYOUT], where the artboard is expected
+     * ℹ️ This is required when setting the fit type to [Fit.Layout], where the artboard is expected
      * to match the dimensions of the surface it is drawn to and layout its children within those
      * bounds.
      *
@@ -2255,7 +2093,7 @@ class CommandQueue(
         artboardHandle: ArtboardHandle,
         surface: RiveSurface,
         scaleFactor: Float = 1f
-    ) = cppResizeArtboard(
+    ) = bridge.cppResizeArtboard(
         cppPointer.pointer,
         artboardHandle.handle,
         surface.width,
@@ -2267,7 +2105,7 @@ class CommandQueue(
      * Resets an artboard to its original dimensions.
      *
      * ℹ️ This should be called if the artboard was previously resized with [resizeArtboard] and you
-     * now have a fit type other than [Fit.LAYOUT], to restore the artboard to its original size.
+     * now have a fit type other than [Fit.Layout], to restore the artboard to its original size.
      *
      * @param artboardHandle The handle of the artboard to reset.
      * @throws IllegalStateException If the CommandQueue has been released.
@@ -2275,7 +2113,7 @@ class CommandQueue(
     @Throws(IllegalStateException::class)
     fun resetArtboardSize(
         artboardHandle: ArtboardHandle
-    ) = cppResetArtboardSize(
+    ) = bridge.cppResetArtboardSize(
         cppPointer.pointer,
         artboardHandle.handle
     )
@@ -2287,8 +2125,6 @@ class CommandQueue(
      * @param stateMachineHandle The handle of the state machine to use for drawing.
      * @param surface The surface to draw to.
      * @param fit The fit mode of the artboard.
-     * @param alignment The alignment of the artboard.
-     * @param scaleFactor The scale factor to use when aligning the artboard. Defaults to 1.0.
      * @param clearColor The color to clear the surface with before drawing, in AARRGGBB format.
      * @throws IllegalStateException If the CommandQueue has been released.
      */
@@ -2298,10 +2134,8 @@ class CommandQueue(
         stateMachineHandle: StateMachineHandle,
         surface: RiveSurface,
         fit: Fit,
-        alignment: Alignment,
-        scaleFactor: Float = 1f,
         clearColor: Int = Color.TRANSPARENT
-    ) = cppDraw(
+    ) = bridge.cppDraw(
         cppPointer.pointer,
         renderContext.nativeObjectPointer,
         surface.surfaceNativePointer,
@@ -2311,9 +2145,9 @@ class CommandQueue(
         surface.renderTargetPointer.pointer,
         surface.width,
         surface.height,
-        fit,
-        alignment,
-        scaleFactor,
+        fit.nativeMapping,
+        fit.alignment.nativeMapping,
+        fit.scaleFactor,
         clearColor
     )
 
@@ -2332,8 +2166,6 @@ class CommandQueue(
      * @param width The width of the buffer to render.
      * @param height The height of the buffer to render.
      * @param fit Fit to use when drawing.
-     * @param alignment Alignment to use when drawing.
-     * @param scaleFactor The scale factor to use when aligning the artboard. Defaults to 1.0.
      * @param clearColor Clear color used prior to drawing, defaults to transparent.
      * @throws RiveDrawToBufferException If the buffer could not be drawn to for any reason. Further
      *    details can be found in the exception message.
@@ -2347,11 +2179,9 @@ class CommandQueue(
         buffer: ByteArray,
         width: Int,
         height: Int,
-        fit: Fit = Fit.CONTAIN,
-        alignment: Alignment = Alignment.CENTER,
-        scaleFactor: Float = 1f,
+        fit: Fit = Fit.Contain(),
         clearColor: Int = Color.TRANSPARENT
-    ) = cppDrawToBuffer(
+    ) = bridge.cppDrawToBuffer(
         cppPointer.pointer,
         renderContext.nativeObjectPointer,
         surface.surfaceNativePointer,
@@ -2361,9 +2191,9 @@ class CommandQueue(
         surface.renderTargetPointer.pointer,
         width,
         height,
-        fit,
-        alignment,
-        scaleFactor,
+        fit.nativeMapping,
+        fit.alignment.nativeMapping,
+        fit.scaleFactor,
         clearColor,
         buffer
     )
@@ -2382,7 +2212,7 @@ class CommandQueue(
      */
     @Throws(IllegalStateException::class)
     private fun runOnCommandServer(work: () -> Unit) =
-        cppRunOnCommandServer(cppPointer.pointer, work)
+        bridge.cppRunOnCommandServer(cppPointer.pointer, work)
 
     /**
      * The map of all pending continuations, keyed by request ID. Entries are added when a suspend

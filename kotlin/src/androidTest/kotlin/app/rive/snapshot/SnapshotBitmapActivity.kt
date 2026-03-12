@@ -6,7 +6,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import app.rive.Artboard
-import app.rive.ExperimentalRiveComposeAPI
+import app.rive.Fit
 import app.rive.RenderBuffer
 import app.rive.Result
 import app.rive.RiveFile
@@ -15,8 +15,7 @@ import app.rive.RiveLog
 import app.rive.StateMachine
 import app.rive.ViewModelInstance
 import app.rive.ViewModelSource
-import app.rive.core.CommandQueue
-import app.rive.runtime.kotlin.core.Fit
+import app.rive.core.RiveWorker
 import app.rive.runtime.kotlin.core.Rive
 import app.rive.runtime.kotlin.test.R
 import kotlinx.coroutines.launch
@@ -31,7 +30,6 @@ private const val BITMAP_TAG = "Rive/BitmapSnapshotActivity"
  * The rendered bitmap is returned through [resultBitmap] so that tests can assert on the output.
  * The [resultLatch] is used to signal when the bitmap is ready.
  */
-@OptIn(ExperimentalRiveComposeAPI::class)
 class SnapshotBitmapActivity : ComponentActivity(), SnapshotActivityResult {
     companion object {
         /**
@@ -58,15 +56,15 @@ class SnapshotBitmapActivity : ComponentActivity(), SnapshotActivityResult {
         Rive.init(this)
 
         lifecycleScope.launch {
-            val commandQueue = CommandQueue().also { queue ->
-                queue.withLifecycle(this@SnapshotBitmapActivity, BITMAP_TAG)
+            val riveWorker = RiveWorker().also { worker ->
+                worker.withLifecycle(this@SnapshotBitmapActivity, BITMAP_TAG)
                 lifecycleScope.launch {
-                    queue.beginPolling(lifecycle)
+                    worker.beginPolling(lifecycle)
                 }
             }
             val riveFileResult = RiveFile.fromSource(
                 RiveFileSource.RawRes(R.raw.snapshot_test, resources),
-                commandQueue
+                riveWorker
             )
 
             when (riveFileResult) {
@@ -94,26 +92,22 @@ class SnapshotBitmapActivity : ComponentActivity(), SnapshotActivityResult {
         val (width, height) = 100 to 100
         val fit = when (config) {
             is SnapshotActivityConfig.Layout -> if (config.useLayout) {
-                Fit.LAYOUT
+                Fit.Layout(config.layoutScale)
             } else {
-                Fit.NONE
+                Fit.None()
             }
 
-            else -> Fit.NONE // Default to no layout for other scenarios
-        }
-        val layoutScale = when (config) {
-            is SnapshotActivityConfig.Layout -> config.layoutScale
-            else -> 1f // Default of 1 for other scenarios
+            else -> Fit.None() // Default to no layout for other scenarios
         }
 
-        RenderBuffer(width, height, file.commandQueue).use { buffer ->
+        RenderBuffer(width, height, file.riveWorker).use { buffer ->
             Artboard.fromFile(file, config.artboardName).use { artboard ->
                 StateMachine.fromArtboard(artboard).use { stateMachine ->
                     ViewModelInstance.fromFile(
                         file,
                         ViewModelSource.DefaultForArtboard(artboard).defaultInstance()
                     ).use { vmi ->
-                        file.commandQueue.bindViewModelInstance(
+                        file.riveWorker.bindViewModelInstance(
                             stateMachine.stateMachineHandle,
                             vmi.instanceHandle
                         )
@@ -152,7 +146,7 @@ class SnapshotBitmapActivity : ComponentActivity(), SnapshotActivityResult {
                             }
                         }
                         resultBitmap =
-                            buffer.snapshot(artboard, stateMachine, fit, scaleFactor = layoutScale)
+                            buffer.snapshot(artboard, stateMachine, fit)
                                 .toBitmap()
                     }
                 }
