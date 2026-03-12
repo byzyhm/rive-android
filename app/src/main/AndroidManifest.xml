@@ -110,6 +110,7 @@
             android:exported="true" />
         <activity android:name=".OnboardingStateMachineActivity" />
         <activity android:name=".AiGlowActivity" />
+        <activity android:name=".MsgGlowActivity" />
         <activity android:name=".TextRunDemoActivity" />
         <activity android:name=".NestedInputActivity"
             android:exported="true" />
