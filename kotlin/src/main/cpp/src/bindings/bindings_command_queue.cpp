@@ -291,6 +291,21 @@ public:
                      jList.get());
     }
 
+    void onDefaultViewModelInfoReceived(const rive::ArtboardHandle,
+                                        uint64_t requestID,
+                                        std::string viewModelName,
+                                        std::string instanceName) override
+    {
+        auto env = GetJNIEnv();
+        auto jViewModelName = MakeJString(env, viewModelName);
+        auto jInstanceName = MakeJString(env, instanceName);
+        m_queue.call("onDefaultViewModelInfoReceived",
+                     "(JLjava/lang/String;Ljava/lang/String;)V",
+                     requestID,
+                     jViewModelName.get(),
+                     jInstanceName.get());
+    }
+
 private:
     JCommandQueue m_queue;
 };
@@ -983,6 +998,25 @@ extern "C"
             handleFromLong<rive::ArtboardHandle>(jArtboardHandle);
 
         commandQueue->requestStateMachineNames(artboardHandle, requestID);
+    }
+
+    JNIEXPORT void JNICALL
+    Java_app_rive_core_CommandQueueJNIBridge_cppGetDefaultViewModelInfo(
+        JNIEnv*,
+        jobject,
+        jlong ref,
+        jlong requestID,
+        jlong jFileHandle,
+        jlong jArtboardHandle)
+    {
+        auto commandQueue = reinterpret_cast<rive::CommandQueue*>(ref);
+        auto fileHandle = handleFromLong<rive::FileHandle>(jFileHandle);
+        auto artboardHandle =
+            handleFromLong<rive::ArtboardHandle>(jArtboardHandle);
+
+        commandQueue->requestDefaultViewModelInfo(artboardHandle,
+                                                  fileHandle,
+                                                  requestID);
     }
 
     JNIEXPORT void JNICALL
@@ -2189,8 +2223,8 @@ extern "C"
         auto* renderContext =
             reinterpret_cast<RenderContext*>(renderContextRef);
         auto* nativeSurface = reinterpret_cast<void*>(surfaceRef);
-        auto* renderTarget =
-            reinterpret_cast<rive::gpu::RenderTargetGL*>(renderTargetRef);
+        auto renderTarget = rive::ref_rcp(
+            reinterpret_cast<rive::gpu::RenderTargetGL*>(renderTargetRef));
         auto fit = GetFit(static_cast<uint8_t>(jFit));
         auto alignment = GetAlignment(static_cast<uint8_t>(jAlignment));
         auto scaleFactor = static_cast<float_t>(jScaleFactor);
@@ -2267,7 +2301,7 @@ extern "C"
 
             // Flush the draw commands
             riveContext->flush({
-                .renderTarget = renderTarget,
+                .renderTarget = renderTarget.get(),
             });
 
             // Render context specific - swap buffers
@@ -2299,8 +2333,8 @@ extern "C"
         auto* renderContext =
             reinterpret_cast<RenderContext*>(renderContextRef);
         auto* nativeSurface = reinterpret_cast<void*>(surfaceRef);
-        auto* renderTarget =
-            reinterpret_cast<rive::gpu::RenderTargetGL*>(renderTargetRef);
+        auto renderTarget = rive::ref_rcp(
+            reinterpret_cast<rive::gpu::RenderTargetGL*>(renderTargetRef));
         auto fit = GetFit(static_cast<uint8_t>(jFit));
         auto alignment = GetAlignment(static_cast<uint8_t>(jAlignment));
         auto scaleFactor = static_cast<float_t>(jScaleFactor);
@@ -2402,7 +2436,7 @@ extern "C"
             artboard->draw(&renderer);
 
             riveContext->flush({
-                .renderTarget = renderTarget,
+                .renderTarget = renderTarget.get(),
             });
 
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
