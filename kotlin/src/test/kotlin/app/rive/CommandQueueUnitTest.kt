@@ -1,12 +1,15 @@
 package app.rive
 
+import androidx.lifecycle.Lifecycle
 import app.rive.core.ArtboardHandle
 import app.rive.core.CommandQueue
 import app.rive.core.CommandQueueBridge
 import app.rive.core.DefaultViewModelInfo
 import app.rive.core.FileHandle
+import app.rive.core.FrameTicker
 import app.rive.core.Listeners
 import app.rive.core.RenderContext
+import app.rive.core.ViewModelInstanceHandle
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.comparables.shouldBeLessThan
@@ -19,17 +22,26 @@ import io.mockk.mockk
 import io.mockk.runs
 import io.mockk.slot
 import io.mockk.verify
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import kotlin.coroutines.cancellation.CancellationException
 
 const val COMMAND_QUEUE_ADDR = 1L
 const val RENDER_CONTEXT_ADDR = 2L
 const val HANDLE_NUM = 123L
 const val ARTBOARD_HANDLE_NUM = 456L
+const val VALUE_HANDLE_NUM = 789L
 val FILE_BYTES = byteArrayOf(0, 1, 2)
+private const val TEST_FINAL_RELEASE_SOURCE = "Test final release"
 
 @OptIn(ExperimentalCoroutinesApi::class, ExperimentalStdlibApi::class)
 class CommandQueueUnitTest : FunSpec({
@@ -48,12 +60,15 @@ class CommandQueueUnitTest : FunSpec({
 
         every { commandQueueBridgeMock.cppConstructor(any()) } returns COMMAND_QUEUE_ADDR
         every { commandQueueBridgeMock.cppDelete(any()) } just runs
+        every { commandQueueBridgeMock.isCurrentThreadCommandServer(any()) } returns false
         every {
             commandQueueBridgeMock.cppCreateListeners(
                 COMMAND_QUEUE_ADDR,
                 any()
             )
         } returns listenersMock
+        every { commandQueueBridgeMock.cppSetTracingEnabled(any(), any()) } just runs
+        every { commandQueueBridgeMock.cppCancelDraw(any(), any()) } just runs
     }
 
     afterTest {
@@ -68,9 +83,41 @@ class CommandQueueUnitTest : FunSpec({
         commandQueue.isDisposed shouldBe false
         verify(exactly = 1) { commandQueueBridgeMock.cppConstructor(RENDER_CONTEXT_ADDR) }
         verify(exactly = 1) {
-            commandQueueBridgeMock.cppCreateListeners(
+            commandQueueBridgeMock.cppSetTracingEnabled(COMMAND_QUEUE_ADDR, false)
+        }
+        verify(exactly = 1) {
+            commandQueueBridgeMock.cppCreateListeners(COMMAND_QUEUE_ADDR, commandQueue)
+        }
+    }
+
+    test("Constructor propagates tracing enabled when requested") {
+        CommandQueue(renderContextMock, commandQueueBridgeMock, tracingEnabled = true)
+
+        verify(exactly = 1) {
+            commandQueueBridgeMock.cppSetTracingEnabled(
                 COMMAND_QUEUE_ADDR,
-                commandQueue
+                true
+            )
+        }
+    }
+
+    test("setTracingEnabled forwards each call") {
+        val commandQueue = CommandQueue(renderContextMock, commandQueueBridgeMock)
+
+        commandQueue.setTracingEnabled(false)
+        commandQueue.setTracingEnabled(true)
+        commandQueue.setTracingEnabled(true)
+
+        verify(exactly = 2) {
+            commandQueueBridgeMock.cppSetTracingEnabled(
+                COMMAND_QUEUE_ADDR,
+                false
+            )
+        }
+        verify(exactly = 2) {
+            commandQueueBridgeMock.cppSetTracingEnabled(
+                COMMAND_QUEUE_ADDR,
+                true
             )
         }
     }
@@ -78,11 +125,91 @@ class CommandQueueUnitTest : FunSpec({
     test("Release disposes native resources") {
         val commandQueue = CommandQueue(renderContextMock, commandQueueBridgeMock)
 
-        commandQueue.release("")
+        commandQueue.release(TEST_FINAL_RELEASE_SOURCE)
 
         commandQueue.refCount shouldBe 0
+        commandQueue.awaitShutdown(1000) shouldBe true
         verify(exactly = 1) { commandQueueBridgeMock.cppDelete(COMMAND_QUEUE_ADDR) }
         verify(exactly = 1) { listenersMock.close() }
+        verify(exactly = 1) { renderContextMock.close() }
+    }
+
+    test("Release returns before native shutdown completes") {
+        val shutdownEntered = CountDownLatch(1)
+        val shutdownMayFinish = CountDownLatch(1)
+        every { commandQueueBridgeMock.cppDelete(any()) } answers {
+            shutdownEntered.countDown()
+            shutdownMayFinish.await(2, TimeUnit.SECONDS)
+            Unit
+        }
+        val commandQueue = CommandQueue(renderContextMock, commandQueueBridgeMock)
+
+        // If release does not return immediately as expected, the test will timeout and fail
+        commandQueue.release(TEST_FINAL_RELEASE_SOURCE)
+
+        commandQueue.refCount shouldBe 0
+        commandQueue.isDisposed shouldBe true
+        shutdownEntered.await(1000, TimeUnit.MILLISECONDS) shouldBe true
+        // Because the test thread is unblocked, we can verify that shutdown is awaiting the latch.
+        commandQueue.awaitShutdown(50) shouldBe false
+        verify(exactly = 0) { listenersMock.close() }
+        verify(exactly = 0) { renderContextMock.close() }
+
+        shutdownMayFinish.countDown()
+        commandQueue.awaitShutdown(1000) shouldBe true
+        verify(exactly = 1) { listenersMock.close() }
+        verify(exactly = 1) { renderContextMock.close() }
+    }
+
+    test("Release cancels pending native continuations immediately") {
+        coroutineScope {
+            val commandQueue = CommandQueue(renderContextMock, commandQueueBridgeMock)
+            val submissionStarted = CountDownLatch(1)
+            every {
+                commandQueueBridgeMock.cppLoadFile(COMMAND_QUEUE_ADDR, any(), FILE_BYTES)
+            } answers {
+                submissionStarted.countDown()
+            }
+
+            // Start immediately so loadFile registers its continuation before release cancels it.
+            val load = async(start = CoroutineStart.UNDISPATCHED) {
+                shouldThrow<CancellationException> { commandQueue.loadFile(FILE_BYTES) }
+            }
+
+            submissionStarted.await(1000, TimeUnit.MILLISECONDS) shouldBe true
+            commandQueue.release(TEST_FINAL_RELEASE_SOURCE)
+
+            withTimeout(1_000) {
+                load.await()
+            }
+            commandQueue.awaitShutdown(1000) shouldBe true
+        }
+    }
+
+    test("Native submission failure propagates") {
+        val commandQueue = CommandQueue(renderContextMock, commandQueueBridgeMock)
+        val expectedError = IllegalStateException("Submission failed")
+        every {
+            commandQueueBridgeMock.cppLoadFile(COMMAND_QUEUE_ADDR, any(), FILE_BYTES)
+        } throws expectedError
+
+        shouldThrow<IllegalStateException> {
+            commandQueue.loadFile(FILE_BYTES)
+        } shouldBe expectedError
+    }
+
+    test("beginPolling throws if called after release") {
+        val commandQueue = CommandQueue(renderContextMock, commandQueueBridgeMock)
+        val lifecycle = mockk<Lifecycle>()
+        val ticker = FrameTicker { error("Polling should not request a frame after release") }
+
+        commandQueue.release(TEST_FINAL_RELEASE_SOURCE)
+        commandQueue.awaitShutdown(1000) shouldBe true
+
+        shouldThrow<IllegalStateException> {
+            commandQueue.beginPolling(lifecycle, ticker)
+        }.message shouldContain "released"
+        verify(exactly = 0) { commandQueueBridgeMock.cppPollMessages(any()) }
     }
 
     test("Load file invokes native method and returns handle") {
@@ -162,6 +289,23 @@ class CommandQueueUnitTest : FunSpec({
         requestIDs[0] shouldBeLessThan requestIDs[1]
     }
 
+
+    test("Delete file invokes native") {
+        val commandQueue = CommandQueue(renderContextMock, commandQueueBridgeMock)
+        val requestID = slot<Long>()
+        val fileHandle = FileHandle(HANDLE_NUM)
+
+        every {
+            commandQueueBridgeMock.cppDeleteFile(COMMAND_QUEUE_ADDR, capture(requestID), HANDLE_NUM)
+        } just runs
+
+        commandQueue.deleteFile(fileHandle)
+
+        verify(exactly = 1) {
+            commandQueueBridgeMock.cppDeleteFile(COMMAND_QUEUE_ADDR, requestID.captured, HANDLE_NUM)
+        }
+    }
+
     test("Get default view model info returns name and instance") {
         val commandQueue = CommandQueue(renderContextMock, commandQueueBridgeMock)
         val requestID = slot<Long>()
@@ -228,19 +372,43 @@ class CommandQueueUnitTest : FunSpec({
         }
     }
 
-    test("Delete file invokes native") {
+    test("Set view model instance property invokes native") {
         val commandQueue = CommandQueue(renderContextMock, commandQueueBridgeMock)
-        val requestID = slot<Long>()
-        val fileHandle = FileHandle(HANDLE_NUM)
+        val instanceHandle = ViewModelInstanceHandle(HANDLE_NUM)
+        val valueHandle = ViewModelInstanceHandle(VALUE_HANDLE_NUM)
+        val propertyPath = "nested/path"
 
         every {
-            commandQueueBridgeMock.cppDeleteFile(COMMAND_QUEUE_ADDR, capture(requestID), HANDLE_NUM)
+            commandQueueBridgeMock.cppSetViewModelInstanceProperty(
+                COMMAND_QUEUE_ADDR,
+                HANDLE_NUM,
+                propertyPath,
+                VALUE_HANDLE_NUM
+            )
         } just runs
 
-        commandQueue.deleteFile(fileHandle)
+        commandQueue.setViewModelInstanceProperty(instanceHandle, propertyPath, valueHandle)
 
         verify(exactly = 1) {
-            commandQueueBridgeMock.cppDeleteFile(COMMAND_QUEUE_ADDR, requestID.captured, HANDLE_NUM)
+            commandQueueBridgeMock.cppSetViewModelInstanceProperty(
+                COMMAND_QUEUE_ADDR,
+                HANDLE_NUM,
+                propertyPath,
+                VALUE_HANDLE_NUM
+            )
+        }
+    }
+
+    test("Set view model instance property throws when released") {
+        val commandQueue = CommandQueue(renderContextMock, commandQueueBridgeMock)
+        commandQueue.release(TEST_FINAL_RELEASE_SOURCE)
+
+        shouldThrow<IllegalStateException> {
+            commandQueue.setViewModelInstanceProperty(
+                ViewModelInstanceHandle(HANDLE_NUM),
+                "path",
+                ViewModelInstanceHandle(VALUE_HANDLE_NUM)
+            )
         }
     }
 })

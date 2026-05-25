@@ -2,6 +2,8 @@ package app.rive.runtime.kotlin.renderers
 
 import androidx.annotation.VisibleForTesting
 import androidx.annotation.WorkerThread
+import app.rive.RiveLog
+import app.rive.core.traceSection
 import app.rive.runtime.kotlin.controllers.RiveFileController
 import app.rive.runtime.kotlin.core.Fit
 import app.rive.runtime.kotlin.core.RendererType
@@ -16,12 +18,16 @@ open class RiveArtboardRenderer(
     rendererType: RendererType = Rive.defaultRendererType,
     private var controller: RiveFileController,
 ) : Renderer(rendererType, trace) {
+    companion object {
+        const val TAG = "RiveL/RiveArtboardRenderer"
+    }
 
     private val fit get() = controller.fit
     private val alignment get() = controller.alignment
     private val scaleFactor get() = controller.layoutScaleFactorActive
 
     init {
+        RiveLog.d(TAG) { "Initializing." }
         controller.also {
             it.onStart = ::start
             it.acquire()
@@ -34,17 +40,30 @@ open class RiveArtboardRenderer(
     @WorkerThread
     @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
     open fun resizeArtboard() {
-        if (!hasCppObject) return
-
         if (fit == Fit.LAYOUT) {
-            val newWidth = width / scaleFactor
-            val newHeight = height / scaleFactor
-            controller.activeArtboard?.apply {
-                width = newWidth
-                height = newHeight
+            traceSection("Rive/Layout/ResizeArtboard") {
+                // Read surface dimensions under frameLock so delete() cannot null cppPointer between
+                // hasCppObject checks and width/height dereference.
+                val (newWidth, newHeight) = synchronized(frameLock) {
+                    if (!hasCppObject || !controller.isActive) return
+                    Pair(width / scaleFactor, height / scaleFactor)
+                }
+
+                // Acquire file lock only after the frameLock section to avoid lock-order inversion and
+                // serialize artboard mutations with controller/file lifecycle operations.
+                synchronized(controller.file?.lock ?: this) {
+                    controller.activeArtboard?.apply {
+                        width = newWidth
+                        height = newHeight
+                    }
+                }
             }
         } else {
-            controller.activeArtboard?.resetArtboardSize()
+            traceSection("Rive/Layout/ResetArtboardSize") {
+                synchronized(controller.file?.lock ?: this) {
+                    controller.activeArtboard?.resetArtboardSize()
+                }
+            }
         }
     }
 
@@ -52,7 +71,7 @@ open class RiveArtboardRenderer(
     @WorkerThread
     override fun draw() {
         if (controller.requireArtboardResize.getAndSet(false)) {
-            synchronized(controller.file?.lock ?: this) { resizeArtboard() }
+            resizeArtboard()
         }
 
         // Deref and draw under frameLock
@@ -84,6 +103,7 @@ open class RiveArtboardRenderer(
     }
 
     fun reset() {
+        RiveLog.d(TAG) { "Reset." }
         controller.stopAnimations()
         controller.reset()
         stop()

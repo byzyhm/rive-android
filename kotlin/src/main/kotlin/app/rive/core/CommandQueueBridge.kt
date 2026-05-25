@@ -14,6 +14,8 @@ interface CommandQueueBridge {
     fun cppCreateListeners(pointer: Long, receiver: CommandQueue): Listeners
 
     fun cppPollMessages(pointer: Long)
+    fun cppSetTracingEnabled(pointer: Long, enabled: Boolean)
+    fun isCurrentThreadCommandServer(pointer: Long): Boolean
 
     fun cppLoadFile(pointer: Long, requestID: Long, bytes: ByteArray)
     fun cppDeleteFile(pointer: Long, requestID: Long, fileHandle: Long)
@@ -272,6 +274,13 @@ interface CommandQueueBridge {
         artboardHandle: Long
     )
 
+    fun cppSetViewModelInstanceProperty(
+        pointer: Long,
+        viewModelInstanceHandle: Long,
+        propertyPath: String,
+        valueHandle: Long
+    )
+
     fun cppGetListSize(
         pointer: Long,
         requestID: Long,
@@ -408,7 +417,6 @@ interface CommandQueueBridge {
         artboardHandle: Long
     )
 
-    fun cppCreateRiveRenderTarget(pointer: Long, width: Int, height: Int): Long
     fun cppCreateDrawKey(pointer: Long): Long
     fun cppDraw(
         pointer: Long,
@@ -425,6 +433,8 @@ interface CommandQueueBridge {
         scaleFactor: Float,
         clearColor: Int
     )
+
+    fun cppCancelDraw(pointer: Long, drawKey: Long)
 
     fun cppDrawToBuffer(
         pointer: Long,
@@ -453,6 +463,8 @@ internal class CommandQueueJNIBridge : CommandQueueBridge {
     external override fun cppCreateListeners(pointer: Long, receiver: CommandQueue): Listeners
 
     external override fun cppPollMessages(pointer: Long)
+    external override fun cppSetTracingEnabled(pointer: Long, enabled: Boolean)
+    external override fun isCurrentThreadCommandServer(pointer: Long): Boolean
 
     external override fun cppLoadFile(pointer: Long, requestID: Long, bytes: ByteArray)
     external override fun cppDeleteFile(
@@ -715,6 +727,13 @@ internal class CommandQueueJNIBridge : CommandQueueBridge {
         artboardHandle: Long
     )
 
+    external override fun cppSetViewModelInstanceProperty(
+        pointer: Long,
+        viewModelInstanceHandle: Long,
+        propertyPath: String,
+        valueHandle: Long
+    )
+
     external override fun cppGetListSize(
         pointer: Long,
         requestID: Long,
@@ -851,7 +870,6 @@ internal class CommandQueueJNIBridge : CommandQueueBridge {
         artboardHandle: Long
     )
 
-    external override fun cppCreateRiveRenderTarget(pointer: Long, width: Int, height: Int): Long
     external override fun cppCreateDrawKey(pointer: Long): Long
     external override fun cppDraw(
         pointer: Long,
@@ -868,6 +886,8 @@ internal class CommandQueueJNIBridge : CommandQueueBridge {
         scaleFactor: Float,
         clearColor: Int
     )
+
+    external override fun cppCancelDraw(pointer: Long, drawKey: Long)
 
     external override fun cppDrawToBuffer(
         pointer: Long,

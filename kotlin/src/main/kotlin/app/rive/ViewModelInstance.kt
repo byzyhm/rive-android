@@ -62,6 +62,16 @@ class ViewModelInstance internal constructor(
         }
     }
 
+    /**
+     * Whether this view model instance is owned by [worker].
+     *
+     * Useful for validating that multiple Rive resources can safely be used together.
+     *
+     * @param worker A worker reference to check ownership against.
+     * @return true if this view model instance is owned by [worker], false otherwise.
+     */
+    internal fun isOwnedBy(worker: RiveWorker): Boolean = riveWorker === worker
+
     private val _dirtyFlow = MutableSharedFlow<Unit>(
         replay = 1,
         extraBufferCapacity = 1,
@@ -334,6 +344,32 @@ class ViewModelInstance internal constructor(
     fun setArtboard(propertyPath: String, artboard: Artboard) {
         RiveLog.d(VM_INSTANCE_TAG) { "Assigning $artboard to $propertyPath (${fileHandle})" }
         setProperty(propertyPath, artboard.artboardHandle, riveWorker::setArtboardProperty)
+    }
+
+    /**
+     * Assigns the given view model instance to the nested view model property on this view model
+     * instance.
+     *
+     * ℹ️ Changes to bound Rive elements will not be reflected until the next state machine advance.
+     * 
+     * Once the nested view model instance is added to the view model property, you do not need to
+     * keep your reference to it. The parent view model instance maintains its own native reference
+     * to the nested instance.
+     *
+     * If you created the view model instance manually (for example via
+     * [ViewModelInstance.fromFile]), you may [close][ViewModelInstance.close] it to
+     * release your reference once you no longer need that view model instance elsewhere.
+     *
+     * If you used [rememberViewModelInstance], do not close it manually. It is closed automatically
+     * when the Composable leaves composition.
+     *
+     * @param propertyPath The path to the view model property from this view model instance. Slash
+     *    delimited to refer to nested properties.
+     * @param instance The view model instance to assign to the property.
+     */
+    fun setViewModelInstance(propertyPath: String, instance: ViewModelInstance) {
+        RiveLog.d(VM_INSTANCE_TAG) { "Assigning $instance to $propertyPath (${fileHandle})" }
+        setProperty(propertyPath, instance.instanceHandle, riveWorker::setViewModelInstanceProperty)
     }
 
     suspend fun getListSize(propertyPath: String): Int =
